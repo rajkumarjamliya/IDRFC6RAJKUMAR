@@ -4,10 +4,10 @@ import cv2
 import numpy as np
 
 # Page Configuration
-st.set_page_config(page_title="Warehouse Tracker & Management", layout="wide")
+st.set_page_config(page_title="DELHIVERY – IDRFC6 Warehouse Tracker", layout="wide")
 
 # App Title
-st.title("📦 Warehouse Tracker & Management System")
+st.title("📦 DELHIVERY – IDRFC6 Warehouse Operations Tracker")
 
 # Session State for Login
 if "authenticated" not in st.session_state:
@@ -24,23 +24,22 @@ if st.sidebar.button("Login"):
     else:
         st.sidebar.error("Incorrect Password")
 
-# Main Content Area
 if not st.session_state["authenticated"]:
     st.warning("⚠️ Please enter the Admin password from the sidebar to make changes.")
 else:
-    st.success("🔓 Admin Access Granted. You can now manage and edit data.")
+    st.success("🔓 Admin Access Granted.")
 
-# Data Storage
+# Data Storage Initialization
 if "data" not in st.session_state:
-    st.session_state["data"] = pd.DataFrame(columns=["AWB/Order ID", "Employee Name", "Task Type", "Status", "Time"])
+    st.session_state["data"] = pd.DataFrame(columns=[
+        "Timestamp", "AWB / Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Status", "Mistake / Error"
+    ])
 
-# Section: Live Employee Status & New Entry
-st.subheader("📋 Live Employee & Piklist Operations")
-
-col1, col2 = st.columns(2)
+# Layout: Two Columns (Form on Left, Dashboard/Summary on Right)
+col1, col2 = st.columns([1, 1.2])
 
 with col1:
-    st.markdown("### Add New Entry")
+    st.markdown("### 📝 Add New Entry")
     
     # Camera Scanning Section
     st.markdown("#### 📷 Mobile Camera Scanner")
@@ -48,7 +47,6 @@ with col1:
     scanned_code = ""
 
     if camera_image is not None:
-        # Convert image to OpenCV format
         bytes_data = camera_image.getvalue()
         cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
         
@@ -60,7 +58,6 @@ with col1:
             scanned_code = qr_data
             st.success(f"✅ Scanned Code: {scanned_code}")
         else:
-            # Detect Barcode
             try:
                 barcode_detector = cv2.barcode.BarcodeDetector()
                 ok, barcode_data, _, _ = barcode_detector.detectAndDecode(cv2_img)
@@ -68,45 +65,74 @@ with col1:
                     scanned_code = barcode_data[0]
                     st.success(f"✅ Scanned Barcode: {scanned_code}")
                 else:
-                    st.info("💡 Code detect nahi hua. Photo saaf lein ya niche manual type karein.")
+                    st.info("💡 Code detect nahi hua. Niche manual type karein.")
             except Exception:
                 st.info("💡 Code detect nahi hua. Niche manual enter karein.")
 
     st.markdown("---")
     
     with st.form("entry_form"):
-        # Auto-fill scanned code if detected
-        awb = st.text_input("AWB / Order ID / Piklist No.", value=scanned_code)
+        awb = st.text_input("AWB / Piklist No.", value=scanned_code)
         emp_name = st.text_input("Employee Name")
-        task_type = st.selectbox("Task Type", ["Picking", "Packing", "Scanning", "Loading", "Free"])
-        status = st.selectbox("Status", ["In Progress", "Completed", "Pending"])
+        emp_id = st.text_input("Employee ID")
+        task_type = st.selectbox("Task Type", ["Picking", "Scanning", "Packing", "Manifest", "Loading", "Free"])
+        courier = st.selectbox("Courier", ["Delhivery", "Xpressbees", "Ecom Express", "Bluedart", "Shadowfax", "Other"])
+        status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"])
+        mistake = st.selectbox("Mistake / Error", ["None", "Wrong Item", "Missing Item", "Tag Damage", "Wrong Scanning"])
+        
         submit = st.form_submit_button("Submit Entry")
         
         if submit:
-            if awb and emp_name:
+            if awb and emp_name and emp_id:
                 new_row = pd.DataFrame({
-                    "AWB/Order ID": [awb],
+                    "Timestamp": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")],
+                    "AWB / Piklist No.": [awb],
                     "Employee Name": [emp_name],
+                    "Employee ID": [emp_id],
                     "Task Type": [task_type],
+                    "Courier": [courier],
                     "Status": [status],
-                    "Time": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")]
+                    "Mistake / Error": [mistake]
                 })
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
-                st.success("Entry Added Successfully!")
+                st.success("Entry Saved Successfully!")
             else:
-                st.error("Please fill in AWB & Employee Name.")
+                st.error("Please fill in AWB, Employee Name, and Employee ID.")
 
 with col2:
-    st.markdown("### 📊 Live Status Dashboard")
-    if not st.session_state["data"].empty:
-        st.dataframe(st.session_state["data"], use_container_width=True)
+    st.markdown("### 📊 Live Summary & Dashboard")
+    
+    df = st.session_state["data"]
+    
+    if not df.empty:
+        # Total counts metrics
+        total_parcels = len(df)
+        st.metric(label="📦 Total Entries / Parcels", value=total_parcels)
+        
+        # Courier-wise Counting Table
+        st.markdown("#### 🚚 Courier-wise Counting")
+        courier_counts = df["Courier"].value_counts().reset_index()
+        courier_counts.columns = ["Courier Name", "Total Count"]
+        st.dataframe(courier_counts, use_container_width=True)
+        
+        # Employee-wise Performance Table
+        st.markdown("#### 👨‍💻 Employee-wise Performance")
+        emp_counts = df[["Employee Name", "Employee ID"]].value_counts().reset_index()
+        emp_counts.columns = ["Employee Name", "Employee ID", "Total Tasks Done"]
+        st.dataframe(emp_counts, use_container_width=True)
+        
+        # Full Live Data Table
+        st.markdown("#### 📋 Detailed Records")
+        st.dataframe(df, use_container_width=True)
     else:
-        st.info("No entries yet. Add a new entry from the form.")
+        st.info("No entries yet. Add a new entry to see live counting and summaries.")
 
-# Admin Only Delete Section
+# Admin Control Panel
 if st.session_state["authenticated"]:
     st.markdown("---")
-    st.subheader("⚙️ Admin Control Panel (Delete / Reset Data)")
+    st.subheader("⚙️ Admin Control Panel")
     if st.button("Clear All Data"):
-        st.session_state["data"] = pd.DataFrame(columns=["AWB/Order ID", "Employee Name", "Task Type", "Status", "Time"])
+        st.session_state["data"] = pd.DataFrame(columns=[
+            "Timestamp", "AWB / Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Status", "Mistake / Error"
+        ])
         st.success("All data cleared successfully!")
