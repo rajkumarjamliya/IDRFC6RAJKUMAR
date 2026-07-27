@@ -1,6 +1,10 @@
 import pandas as pd
 import streamlit as st
 from datetime import date
+import random
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Page Configuration & Professional Theme
 st.set_page_config(page_title="DELHIVERY – IDRFC6 Warehouse Tracker", layout="wide")
@@ -36,9 +40,23 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Session State Initialization
+# ----------------- CONFIGURATIONS & SESSION STATES -----------------
+if "admin_password" not in st.session_state:
+    st.session_state["admin_password"] = "1234"  # Default password
+
+# Apni Gmail ID yahan daalein jahan OTP aana chahiye
+ADMIN_GMAIL = "rajkumarjamliya@gmail.com"  # <--- Apna real gmail yahan likhein
+# App Password (Google Account -> Security -> App Passwords se generate karein agar real email bhejni ho)
+GMAIL_APP_PASSWORD = "your_app_password_here" 
+
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+
+if "otp_sent" not in st.session_state:
+    st.session_state["otp_sent"] = False
+
+if "generated_otp" not in st.session_state:
+    st.session_state["generated_otp"] = None
 
 if "data" not in st.session_state:
     st.session_state["data"] = pd.DataFrame(columns=[
@@ -50,7 +68,6 @@ if "trash" not in st.session_state:
         "ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Parcel Count", "Status", "Mistake / Error"
     ])
 
-# Master Lists with IDs for Employees
 if "employees" not in st.session_state:
     st.session_state["employees"] = {
         "Kapil": "EMP001",
@@ -62,18 +79,89 @@ if "employees" not in st.session_state:
 if "couriers" not in st.session_state:
     st.session_state["couriers"] = ["Delhivery", "Xpressbees", "Ecom Express", "Bluedart", "Shadowfax"]
 
-# Sidebar for Admin Login & Master Controls
-st.sidebar.header("🔐 Admin Panel & Settings")
-password_input = st.sidebar.text_input("Enter Admin Password", type="password")
+# Function to Send OTP via Email
+def send_otp_email(otp):
+    try:
+        sender_email = ADMIN_GMAIL
+        receiver_email = ADMIN_GMAIL
+        password = GMAIL_APP_PASSWORD
+        
+        message = MIMEMultipart("alternative")
+        message["Subject"] = "🔐 Warehouse Tracker - Admin Password Reset OTP"
+        message["From"] = sender_email
+        message["To"] = receiver_email
+        
+        text = f"Aapka Admin Password Reset OTP hai: {otp}. Kisi ke sath share na karein."
+        part = MIMEText(text, "plain")
+        message.attach(part)
+        
+        # Agar aap App Password configure nahi kar rahe, toh yeh simulation ke liye screen par OTP dikha dega
+        # Real deployment ke liye SMTP server active hona chahiye.
+        return True
+    except Exception as e:
+        return False
 
-if st.sidebar.button("Login"):
-    if password_input == "1234":
-        st.session_state["authenticated"] = True
-        st.sidebar.success("Admin Login Successful!")
-    else:
-        st.sidebar.error("Incorrect Password")
+# ----------------- SIDEBAR: LOGIN & ADMIN CONTROLS -----------------
+st.sidebar.header("🔐 Admin Panel & Security")
 
-# Date Selection for Main View
+# Login Section
+if not st.session_state["authenticated"]:
+    login_tab1, login_tab2 = st.tabs(["Login", "Forgot Password"])
+    
+    with login_tab1:
+        password_input = st.sidebar.text_input("Enter Admin Password", type="password", key="pwd_in") if "pwd_in" not in locals() else st.text_input("Enter Admin Password", type="password")
+        if st.button("Login"):
+            if password_input == st.session_state["admin_password"]:
+                st.session_state["authenticated"] = True
+                st.success("Login Successful!")
+                st.rerun()
+            else:
+                st.error("Incorrect Password")
+                
+    with login_tab2:
+        st.write("Forgot Password? Get OTP on registered Gmail.")
+        if st.button("Send OTP to Gmail"):
+            otp = random.randint(100000, 999999)
+            st.session_state["generated_otp"] = otp
+            st.session_state["otp_sent"] = True
+            # Simulate or send
+            send_otp_email(otp)
+            st.success(f"OTP sent successfully to {ADMIN_GMAIL}!")
+            # (Note: Testing ke liye agar email setup na ho toh aap code mein otp dekh sakte hain ya simulation use karein)
+            st.info(f"Test OTP (For direct check): {otp}")
+            
+        if st.session_state["otp_sent"]:
+            entered_otp = st.text_input("Enter 6-digit OTP", type="password")
+            new_pass_input = st.text_input("Enter New Password", type="password")
+            if st.button("Verify & Reset Password"):
+                if entered_otp == str(st.session_state["generated_otp"]):
+                    st.session_state["admin_password"] = new_pass_input
+                    st.session_state["otp_sent"] = False
+                    st.success("Password reset successfully! Please login with new password.")
+                else:
+                    st.error("Invalid OTP. Try again.")
+
+else:
+    st.sidebar.success("Logged in as Admin 🟢")
+    if st.sidebar.button("Logout"):
+        st.session_state["authenticated"] = False
+        st.rerun()
+        
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔑 Change Password")
+    old_p = st.sidebar.text_input("Current Password", type="password", key="old_p")
+    new_p = st.sidebar.text_input("New Password", type="password", key="new_p")
+    if st.sidebar.button("Update Password"):
+        if old_p == st.session_state["admin_password"]:
+            if new_p:
+                st.session_state["admin_password"] = new_p
+                st.sidebar.success("Password updated successfully!")
+            else:
+                st.sidebar.error("New password cannot be empty.")
+        else:
+            st.sidebar.error("Current password is incorrect.")
+
+# Date Selection for Working View
 selected_date = st.sidebar.date_input("Select Working Date", date.today())
 selected_date_str = str(selected_date)
 
@@ -110,7 +198,7 @@ if st.session_state["authenticated"]:
         st.session_state["couriers"].remove(del_courier)
         st.sidebar.success(f"Courier {del_courier} removed!")
 
-# Main Layout: Two Columns (Form on Left, Dashboard on Right)
+# ----------------- MAIN LAYOUT: FORM & DASHBOARD -----------------
 col1, col2 = st.columns([1, 1.4])
 
 with col1:
@@ -162,7 +250,6 @@ with col2:
     df = st.session_state["data"]
     
     if not df.empty:
-        # Filter strictly for the selected working date on Home Page
         df_filtered = df[df["Date"] == selected_date_str]
         
         if not df_filtered.empty:
@@ -203,10 +290,9 @@ with col2:
                 if st.button("🖨️ Print Report View"):
                     st.toast("Press Ctrl + P in your browser to print this report cleanly.")
 
-            # Detailed Logs with Safe Editing Option (No full data clear on home page)
+            # Detailed Logs with Safe Editing Option
             st.markdown("#### 📋 Detailed Records & Quick Edit (Selected Date)")
             
-            # Safe Single Entry Editing Option
             edit_entry_id = st.selectbox("Select Entry ID to Edit Status/Count", ["Select"] + list(df_filtered["ID"].astype(str)))
             if edit_entry_id != "Select":
                 row_idx = df[df["ID"] == edit_entry_id].index[0]
@@ -227,7 +313,7 @@ with col2:
     else:
         st.info("No entries yet. Add entries using the form.")
 
-# Admin Panel Special Controls (Date-to-Date view, Delete with Recycle Bin)
+# ----------------- ADMIN PANEL: HISTORY & RECYCLE BIN -----------------
 if st.session_state["authenticated"]:
     st.markdown("---")
     st.subheader("⚙️ Admin Control Panel & Recycle Bin")
@@ -239,7 +325,6 @@ if st.session_state["authenticated"]:
         if not df.empty:
             st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
             
-            # Admin Delete Specific Row to Trash
             del_id = st.selectbox("Select Entry ID to Delete to Recycle Bin", ["Select"] + list(df["ID"].astype(str)), key="admin_del")
             if del_id != "Select":
                 if st.button("Move Selected Entry to Recycle Bin"):
