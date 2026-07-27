@@ -1,10 +1,6 @@
 import pandas as pd
 import streamlit as st
 from datetime import date
-import random
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 
 # Page Configuration & Professional Theme
 st.set_page_config(page_title="DELHIVERY – IDRFC6 Warehouse Tracker", layout="wide")
@@ -40,23 +36,12 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# ----------------- CONFIGURATIONS & SESSION STATES -----------------
+# ----------------- SESSION STATES & DEFAULT PASSWORD -----------------
 if "admin_password" not in st.session_state:
-    st.session_state["admin_password"] = "1234"  # Default password
-
-# Apni Gmail ID yahan daalein jahan OTP aana chahiye
-ADMIN_GMAIL = "rajkumarjamliya@gmail.com"  # <--- Apna real gmail yahan likhein
-# App Password (Google Account -> Security -> App Passwords se generate karein agar real email bhejni ho)
-GMAIL_APP_PASSWORD = "your_app_password_here" 
+    st.session_state["admin_password"] = "122436"  # Updated default password
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
-
-if "otp_sent" not in st.session_state:
-    st.session_state["otp_sent"] = False
-
-if "generated_otp" not in st.session_state:
-    st.session_state["generated_otp"] = None
 
 if "data" not in st.session_state:
     st.session_state["data"] = pd.DataFrame(columns=[
@@ -79,68 +64,18 @@ if "employees" not in st.session_state:
 if "couriers" not in st.session_state:
     st.session_state["couriers"] = ["Delhivery", "Xpressbees", "Ecom Express", "Bluedart", "Shadowfax"]
 
-# Function to Send OTP via Email
-def send_otp_email(otp):
-    try:
-        sender_email = ADMIN_GMAIL
-        receiver_email = ADMIN_GMAIL
-        password = GMAIL_APP_PASSWORD
-        
-        message = MIMEMultipart("alternative")
-        message["Subject"] = "🔐 Warehouse Tracker - Admin Password Reset OTP"
-        message["From"] = sender_email
-        message["To"] = receiver_email
-        
-        text = f"Aapka Admin Password Reset OTP hai: {otp}. Kisi ke sath share na karein."
-        part = MIMEText(text, "plain")
-        message.attach(part)
-        
-        # Agar aap App Password configure nahi kar rahe, toh yeh simulation ke liye screen par OTP dikha dega
-        # Real deployment ke liye SMTP server active hona chahiye.
-        return True
-    except Exception as e:
-        return False
-
 # ----------------- SIDEBAR: LOGIN & ADMIN CONTROLS -----------------
 st.sidebar.header("🔐 Admin Panel & Security")
 
-# Login Section
 if not st.session_state["authenticated"]:
-    login_tab1, login_tab2 = st.tabs(["Login", "Forgot Password"])
-    
-    with login_tab1:
-        password_input = st.sidebar.text_input("Enter Admin Password", type="password", key="pwd_in") if "pwd_in" not in locals() else st.text_input("Enter Admin Password", type="password")
-        if st.button("Login"):
-            if password_input == st.session_state["admin_password"]:
-                st.session_state["authenticated"] = True
-                st.success("Login Successful!")
-                st.rerun()
-            else:
-                st.error("Incorrect Password")
-                
-    with login_tab2:
-        st.write("Forgot Password? Get OTP on registered Gmail.")
-        if st.button("Send OTP to Gmail"):
-            otp = random.randint(100000, 999999)
-            st.session_state["generated_otp"] = otp
-            st.session_state["otp_sent"] = True
-            # Simulate or send
-            send_otp_email(otp)
-            st.success(f"OTP sent successfully to {ADMIN_GMAIL}!")
-            # (Note: Testing ke liye agar email setup na ho toh aap code mein otp dekh sakte hain ya simulation use karein)
-            st.info(f"Test OTP (For direct check): {otp}")
-            
-        if st.session_state["otp_sent"]:
-            entered_otp = st.text_input("Enter 6-digit OTP", type="password")
-            new_pass_input = st.text_input("Enter New Password", type="password")
-            if st.button("Verify & Reset Password"):
-                if entered_otp == str(st.session_state["generated_otp"]):
-                    st.session_state["admin_password"] = new_pass_input
-                    st.session_state["otp_sent"] = False
-                    st.success("Password reset successfully! Please login with new password.")
-                else:
-                    st.error("Invalid OTP. Try again.")
-
+    password_input = st.sidebar.text_input("Enter Admin Password", type="password")
+    if st.sidebar.button("Login"):
+        if password_input == st.session_state["admin_password"]:
+            st.session_state["authenticated"] = True
+            st.success("Login Successful!")
+            st.rerun()
+        else:
+            st.sidebar.error("Incorrect Password")
 else:
     st.sidebar.success("Logged in as Admin 🟢")
     if st.sidebar.button("Logout"):
@@ -149,8 +84,8 @@ else:
         
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔑 Change Password")
-    old_p = st.sidebar.text_input("Current Password", type="password", key="old_p")
-    new_p = st.sidebar.text_input("New Password", type="password", key="new_p")
+    old_p = st.sidebar.text_input("Current Password", type="password")
+    new_p = st.sidebar.text_input("New Password", type="password")
     if st.sidebar.button("Update Password"):
         if old_p == st.session_state["admin_password"]:
             if new_p:
