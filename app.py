@@ -1,5 +1,7 @@
 import pandas as pd
 import streamlit as st
+import cv2
+import numpy as np
 
 # Page Configuration
 st.set_page_config(page_title="Warehouse Tracker & Management", layout="wide")
@@ -28,7 +30,7 @@ if not st.session_state["authenticated"]:
 else:
     st.success("🔓 Admin Access Granted. You can now manage and edit data.")
 
-# Sample Data Storage for Tracking (Employee & Piklist Operations)
+# Data Storage
 if "data" not in st.session_state:
     st.session_state["data"] = pd.DataFrame(columns=["AWB/Order ID", "Employee Name", "Task Type", "Status", "Time"])
 
@@ -39,10 +41,44 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("### Add New Entry")
+    
+    # Camera Scanning Section
+    st.markdown("#### 📷 Mobile Camera Scanner")
+    camera_image = st.camera_input("Scan Barcode / QR Code")
+    scanned_code = ""
+
+    if camera_image is not None:
+        # Convert image to OpenCV format
+        bytes_data = camera_image.getvalue()
+        cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
+        
+        # Detect QR Code
+        qr_detector = cv2.QRCodeDetector()
+        qr_data, _, _ = qr_detector.detectAndDecode(cv2_img)
+        
+        if qr_data:
+            scanned_code = qr_data
+            st.success(f"✅ Scanned Code: {scanned_code}")
+        else:
+            # Detect Barcode
+            try:
+                barcode_detector = cv2.barcode.BarcodeDetector()
+                ok, barcode_data, _, _ = barcode_detector.detectAndDecode(cv2_img)
+                if ok and barcode_data and barcode_data[0]:
+                    scanned_code = barcode_data[0]
+                    st.success(f"✅ Scanned Barcode: {scanned_code}")
+                else:
+                    st.info("💡 Code detect nahi hua. Photo saaf lein ya niche manual type karein.")
+            except Exception:
+                st.info("💡 Code detect nahi hua. Niche manual enter karein.")
+
+    st.markdown("---")
+    
     with st.form("entry_form"):
-        awb = st.text_input("AWB / Order ID")
+        # Auto-fill scanned code if detected
+        awb = st.text_input("AWB / Order ID / Piklist No.", value=scanned_code)
         emp_name = st.text_input("Employee Name")
-        task_type = st.selectbox("Task Type", ["Picking", "Packing", "Loading", "Free"])
+        task_type = st.selectbox("Task Type", ["Picking", "Packing", "Scanning", "Loading", "Free"])
         status = st.selectbox("Status", ["In Progress", "Completed", "Pending"])
         submit = st.form_submit_button("Submit Entry")
         
@@ -58,7 +94,7 @@ with col1:
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
                 st.success("Entry Added Successfully!")
             else:
-                st.error("Please fill in all fields.")
+                st.error("Please fill in AWB & Employee Name.")
 
 with col2:
     st.markdown("### 📊 Live Status Dashboard")
@@ -74,4 +110,3 @@ if st.session_state["authenticated"]:
     if st.button("Clear All Data"):
         st.session_state["data"] = pd.DataFrame(columns=["AWB/Order ID", "Employee Name", "Task Type", "Status", "Time"])
         st.success("All data cleared successfully!")
-        
