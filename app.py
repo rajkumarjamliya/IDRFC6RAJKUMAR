@@ -80,12 +80,29 @@ if "dispatch_reports" not in st.session_state:
 if "trash" not in st.session_state:
     st.session_state["trash"] = pd.DataFrame(columns=st.session_state["data"].columns)
 
+# Permanent Employee List as requested
 if "employees" not in st.session_state:
     st.session_state["employees"] = {
-        "Kapil": "EMP001",
-        "Sanjiv": "EMP002",
-        "Bmpatel": "EMP003",
-        "Rajkumar": "EMP004"
+        "AJAY PATEL": "W222449",
+        "PANKAJ PATEL": "W224500",
+        "KAMLESH MANDOI": "W225396",
+        "ABHISHEK PATEL": "W225403",
+        "SHRI RAM": "W225410",
+        "KUNAL PATIL": "W225413",
+        "RAJSARGARA": "W225415",
+        "ANISH PATEL": "226351",
+        "ANKIT MANDLOI": "W226654",
+        "SANDEEP PATEL": "W228473",
+        "ABHISHEK PATEL (2)": "230777",
+        "RAJKUMAR JAMLIYA": "W224483",
+        "CHANDAN": "W228474",
+        "SHAILESH TIWARI": "SSN079654",
+        "SUJATA KUSHWAHA": "W231056",
+        "SANDHYA KARANJA": "W231195",
+        "HARSHITA SOLANKI": "W231196",
+        "BHAVNA MALVIYA": "W231057",
+        "REKHA": "W231152",
+        "KAVITA": "W231689"
     }
 
 if "couriers" not in st.session_state:
@@ -128,34 +145,24 @@ selected_date = st.sidebar.date_input("Select Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-# Admin Master Management
+# Admin Master Management for Extra Employees / Couriers
 if st.session_state["authenticated"]:
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Master Management")
     
-    new_emp_name = st.sidebar.text_input("New Employee Name")
-    new_emp_id = st.sidebar.text_input("New Employee ID")
+    new_emp_name = st.sidebar.text_input("Extra Employee Name")
+    new_emp_id = st.sidebar.text_input("Extra Employee ID")
     if st.sidebar.button("Add Employee"):
         if new_emp_name and new_emp_id:
             st.session_state["employees"][new_emp_name] = new_emp_id
             st.sidebar.success(f"Employee {new_emp_name} added!")
             
-    del_emp = st.sidebar.selectbox("Delete Employee", ["Select"] + list(st.session_state["employees"].keys()))
-    if st.sidebar.button("Remove Employee") and del_emp != "Select":
-        del st.session_state["employees"][del_emp]
-        st.sidebar.success(f"Employee {del_emp} removed!")
-        
     st.sidebar.markdown("---")
     new_courier = st.sidebar.text_input("New Courier Name")
     if st.sidebar.button("Add Courier"):
         if new_courier and new_courier not in st.session_state["couriers"]:
             st.session_state["couriers"].append(new_courier)
             st.sidebar.success(f"Courier {new_courier} added!")
-            
-    del_courier = st.sidebar.selectbox("Delete Courier", ["Select"] + st.session_state["couriers"])
-    if st.sidebar.button("Remove Courier") and del_courier != "Select":
-        st.session_state["couriers"].remove(del_courier)
-        st.sidebar.success(f"Courier {del_courier} removed!")
 
 # ----------------- MAIN LAYOUT: FORM & DASHBOARD -----------------
 col1, col2 = st.columns([1, 1.4])
@@ -172,9 +179,17 @@ with col1:
         auto_emp_id = st.session_state["employees"].get(emp_name, "") if emp_name != "Select Employee" else ""
         emp_id = st.text_input("Employee ID (Auto-filled)", value=auto_emp_id, disabled=True)
         
-        task_type = st.selectbox("Task Type", ["Manifest", "Picking", "Scanning", "Packing", "Loading", "Free"])
-        courier = st.selectbox("Courier", st.session_state["couriers"])
-        parcel_count = st.number_input("Parcel Count (Quantity)", min_value=1, step=1, value=1)
+        task_type = st.selectbox("Task Type", ["Picking", "Scanning", "Packing", "Manifest", "Loading", "Free"])
+        
+        # Courier will appear ONLY when task_type is Manifest
+        courier = "N/A"
+        parcel_count = 1
+        if task_type == "Manifest":
+            courier = st.selectbox("Courier", st.session_state["couriers"])
+            parcel_count = st.number_input("Parcel Count (Quantity)", min_value=1, step=1, value=1)
+        else:
+            parcel_count = st.number_input("Parcel Count / Item Count", min_value=1, step=1, value=1)
+            
         status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"])
         mistake = st.selectbox("Mistake / Error", ["None", "Wrong Item", "Missing Item", "Tag Damage", "Wrong Scanning"])
         
@@ -199,7 +214,7 @@ with col1:
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
                 save_data(st.session_state["data"])
                 
-                # Automatically update or insert into Dispatch Report
+                # Automatically update or insert into Dispatch Report if Manifest
                 if task_type == "Manifest":
                     rep_df = st.session_state["dispatch_reports"]
                     existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
@@ -233,7 +248,7 @@ with col2:
         
         if not df_filtered.empty:
             total_parcels = df_filtered["Parcel Count"].sum()
-            st.metric(label="📦 Total Parcels Logged on Selected Date", value=total_parcels)
+            st.metric(label="📦 Total Entries / Count on Selected Date", value=total_parcels)
             
             # ----------------- COURIER DISPATCH REPORT TABLE -----------------
             st.markdown(f"#### 📋 Courier Dispatch Report — {selected_date_str}")
@@ -271,7 +286,7 @@ with col2:
                 pending = max(0, (man + yest_pend) - can - dis)
                 
                 display_rows.append({
-                    "Mosaic": c,
+                    "Courier": c,
                     "Yesterday Pending": yest_pend,
                     "Manifest": man,
                     "Cancel": can,
@@ -289,7 +304,7 @@ with col2:
             tot_pend = report_table_df["Pending"].sum()
             
             total_summary_row = pd.DataFrame({
-                "Mosaic": ["Total"],
+                "Courier": ["Total"],
                 "Yesterday Pending": [tot_yest],
                 "Manifest": [tot_man],
                 "Cancel": [tot_can],
@@ -348,7 +363,7 @@ with col2:
             with col_wa:
                 wa_text = f"*📦 DELHIVERY - IDRFC6 Dispatch Report* \n*Date:* {selected_date_str}\n\n"
                 for _, r in report_table_df.iterrows():
-                    wa_text += f"_{r['Mosaic']}_ -> Man:{r['Manifest']} | Dis:{r['Dispatch']} | Pend:{r['Pending']}\n"
+                    wa_text += f"_{r['Courier']}_ -> Man:{r['Manifest']} | Dis:{r['Dispatch']} | Pend:{r['Pending']}\n"
                 encoded_wa = urllib.parse.quote(wa_text)
                 st.markdown(f'<a href="https://wa.me/?text={encoded_wa}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold;">💬 Share on WhatsApp</button></a>', unsafe_allow_html=True)
 
@@ -359,35 +374,60 @@ with col2:
     else:
         st.info("No entries yet. Add entries using the form.")
 
-# ----------------- ADMIN PANEL: HISTORY & RECYCLE BIN -----------------
+# ----------------- ADMIN PANEL: EDIT, DELETE & RECYCLE BIN -----------------
 if st.session_state["authenticated"]:
     st.markdown("---")
-    st.subheader("⚙️ Admin Control Panel & Recycle Bin")
+    st.subheader("⚙️ Admin Control Panel & Entry Corrections")
     
-    admin_tab1, admin_tab2 = st.tabs(["📅 Date-to-Date Master Log", "🗑️ Recycle Bin"])
+    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📅 Date-to-Date Master Log", "✏️ Edit / Delete Entries", "🗑️ Recycle Bin"])
     
     with admin_tab1:
         st.markdown("#### Complete History Across All Dates")
         if not df.empty:
             st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
-            
-            del_id = st.selectbox("Select Entry ID to Delete", ["Select"] + list(df["ID"].astype(str)), key="admin_del")
-            if del_id != "Select":
-                if st.button("Move Selected Entry to Recycle Bin"):
-                    row_to_trash = df[df["ID"] == del_id]
-                    st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
-                    st.session_state["data"] = df[df["ID"] != del_id]
-                    save_data(st.session_state["data"])
-                    st.success("Entry moved to Recycle Bin safely!")
-                    st.rerun()
         else:
             st.info("No history available.")
             
     with admin_tab2:
+        st.markdown("#### ✏️ Edit or Delete Any Wrong Entry")
+        if not df.empty:
+            edit_id = st.selectbox("Select Entry ID to Edit/Delete", ["Select"] + list(df["ID"].astype(str)), key="edit_sel")
+            if edit_id != "Select":
+                row_data = df[df["ID"] == edit_id].iloc[0]
+                
+                with st.form("edit_entry_form"):
+                    new_pik = st.text_input("Piklist No.", value=str(row_data["Piklist No."]))
+                    new_status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"], index=["Completed", "Pending", "In Progress", "Error"].index(row_data["Status"]) if row_data["Status"] in ["Completed", "Pending", "In Progress", "Error"] else 0)
+                    new_count = st.number_input("Parcel/Item Count", min_value=1, step=1, value=int(row_data["Parcel Count"]))
+                    
+                    col_e1, col_e2 = st.columns(2)
+                    update_btn = col_e1.form_submit_button("Save Changes")
+                    delete_btn = col_e2.form_submit_button("Delete Entry")
+                    
+                    if update_btn:
+                        idx = df[df["ID"] == edit_id].index[0]
+                        st.session_state["data"].loc[idx, "Piklist No."] = new_pik
+                        st.session_state["data"].loc[idx, "Status"] = new_status
+                        st.session_state["data"].loc[idx, "Parcel Count"] = int(new_count)
+                        save_data(st.session_state["data"])
+                        st.success("Entry updated successfully!")
+                        st.rerun()
+                        
+                    if delete_btn:
+                        row_to_trash = df[df["ID"] == edit_id]
+                        st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
+                        st.session_state["data"] = df[df["ID"] != edit_id]
+                        save_data(st.session_state["data"])
+                        st.success("Entry moved to Recycle Bin successfully!")
+                        st.rerun()
+        else:
+            st.info("No entries to edit.")
+
+    with admin_tab3:
         st.markdown("#### Deleted Entries (Recycle Bin)")
         trash_df = st.session_state["trash"]
         if not trash_df.empty:
-            st.dataframe(trash_df.drop(columns=["ID"]), use_count=True)
+            st.dataframe(trash_df.drop(columns=["ID"]), use_container_width=True)
             
             restore_id = st.selectbox("Select Entry ID to Restore", ["Select"] + list(trash_df["ID"].astype(str)), key="restore_sel")
             if restore_id != "Select":
