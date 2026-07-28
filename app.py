@@ -65,12 +65,6 @@ def save_reports(df):
     df.to_csv(REPORT_FILE, index=False)
 
 # ----------------- SESSION STATES -----------------
-if "admin_password" not in st.session_state:
-    st.session_state["admin_password"] = "122436"
-
-if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
-
 if "data" not in st.session_state:
     st.session_state["data"] = load_data()
 
@@ -108,61 +102,30 @@ if "employees" not in st.session_state:
 if "couriers" not in st.session_state:
     st.session_state["couriers"] = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
 
-# ----------------- SIDEBAR: LOGIN & ADMIN CONTROLS -----------------
-st.sidebar.header("🔐 Admin Panel & Security")
-
-if not st.session_state["authenticated"]:
-    password_input = st.sidebar.text_input("Enter Admin Password", type="password", key="login_pass")
-    if st.sidebar.button("Login"):
-        if password_input == st.session_state["admin_password"]:
-            st.session_state["authenticated"] = True
-            st.success("Login Successful!")
-            st.rerun()
-        else:
-            st.sidebar.error("Incorrect Password")
-else:
-    st.sidebar.success("Logged in as Admin 🟢")
-    if st.sidebar.button("Logout"):
-        st.session_state["authenticated"] = False
-        st.rerun()
-        
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔑 Change Password")
-    old_p = st.sidebar.text_input("Current Password", type="password", key="old_pass")
-    new_p = st.sidebar.text_input("New Password", type="password", key="new_pass")
-    if st.sidebar.button("Update Password"):
-        if old_p == st.session_state["admin_password"]:
-            if new_p:
-                st.session_state["admin_password"] = new_p
-                st.sidebar.success("Password updated successfully!")
-            else:
-                st.sidebar.error("New password cannot be empty.")
-        else:
-            st.sidebar.error("Current password is incorrect.")
+# ----------------- SIDEBAR: DATE & MASTER MANAGEMENT -----------------
+st.sidebar.header("⚙️ Controls & Management")
 
 # Date Selection for Working View
 selected_date = st.sidebar.date_input("Select Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-# Admin Master Management
-if st.session_state["authenticated"]:
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("⚙️ Master Management")
-    
-    new_emp_name = st.sidebar.text_input("Extra Employee Name", key="new_emp_name_input")
-    new_emp_id = st.sidebar.text_input("Extra Employee ID", key="new_emp_id_input")
-    if st.sidebar.button("Add Employee"):
-        if new_emp_name and new_emp_id:
-            st.session_state["employees"][new_emp_name] = new_emp_id
-            st.sidebar.success(f"Employee {new_emp_name} added!")
-            
-    st.sidebar.markdown("---")
-    new_courier = st.sidebar.text_input("New Courier Name", key="new_courier_input")
-    if st.sidebar.button("Add Courier"):
-        if new_courier and new_courier not in st.session_state["couriers"]:
-            st.session_state["couriers"].append(new_courier)
-            st.sidebar.success(f"Courier {new_courier} added!")
+st.sidebar.markdown("---")
+st.sidebar.subheader("➕ Add New Employee / Courier")
+
+new_emp_name = st.sidebar.text_input("Extra Employee Name", key="new_emp_name_input")
+new_emp_id = st.sidebar.text_input("Extra Employee ID", key="new_emp_id_input")
+if st.sidebar.button("Add Employee"):
+    if new_emp_name and new_emp_id:
+        st.session_state["employees"][new_emp_name] = new_emp_id
+        st.sidebar.success(f"Employee {new_emp_name} added!")
+        
+st.sidebar.markdown("---")
+new_courier = st.sidebar.text_input("New Courier Name", key="new_courier_input")
+if st.sidebar.button("Add Courier"):
+    if new_courier and new_courier not in st.session_state["couriers"]:
+        st.session_state["couriers"].append(new_courier)
+        st.sidebar.success(f"Courier {new_courier} added!")
 
 # ----------------- MAIN LAYOUT: FORM & DASHBOARD -----------------
 col1, col2 = st.columns([1, 1.4])
@@ -170,7 +133,7 @@ col1, col2 = st.columns([1, 1.4])
 with col1:
     st.markdown(f"### 📝 Entry Form ({selected_date_str})")
     
-    piklist_no = st.text_input("Piklist No.")
+    piklist_no = st.text_input("Piklist No. (Sankhiya)")
     
     emp_names_list = ["Select Employee"] + list(st.session_state["employees"].keys())
     emp_name = st.selectbox("Employee Name", emp_names_list)
@@ -201,7 +164,7 @@ with col1:
                 "ID": [entry_id],
                 "Date": [selected_date_str],
                 "Timestamp": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")],
-                "Piklist No.": [piklist_no],
+                "Piklist No.": [str(piklist_no)],
                 "Employee Name": [emp_name],
                 "Employee ID": [auto_emp_id],
                 "Task Type": [task_type],
@@ -314,12 +277,11 @@ with col2:
             
             st.dataframe(report_table_df, use_container_width=True)
             
-            # ----------------- NEW: EDIT / CORRECT COURIER REPORT FORM -----------------
+            # ----------------- EDIT COURIER COUNTING DIRECTLY -----------------
             with st.form("edit_courier_report_form"):
-                st.markdown("##### ✏️ Edit / Correct Courier Counting & Report")
+                st.markdown("##### ✏️ Edit Courier Counting / Report (No Lock)")
                 edit_courier_sel = st.selectbox("Select Courier to Correct", st.session_state["couriers"])
                 
-                # Fetch existing values for selected courier on selected date
                 cur_man_val, cur_can_val, cur_dis_val, cur_rem_val = 0, 0, 0, ""
                 if not rep_data.empty:
                     match_row = rep_data[(rep_data["Date"] == selected_date_str) & (rep_data["Courier"] == edit_courier_sel)]
@@ -334,7 +296,7 @@ with col2:
                 new_dis_input = st.number_input("Corrected Dispatch Count", min_value=0, step=1, value=cur_dis_val)
                 new_rem_input = st.text_input("Corrected Remark", value=cur_rem_val)
                 
-                if st.form_submit_button("Save Courier Correction"):
+                if st.form_submit_button("Update Courier Report"):
                     rep_df = st.session_state["dispatch_reports"]
                     existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == edit_courier_sel)]
                     if not existing_row.empty:
@@ -355,7 +317,7 @@ with col2:
                         st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
                     
                     save_reports(st.session_state["dispatch_reports"])
-                    st.success(f"Courier report for {edit_courier_sel} updated successfully!")
+                    st.success(f"Courier {edit_courier_sel} updated successfully!")
                     st.rerun()
 
             # Export & WhatsApp Sharing Options
@@ -378,84 +340,69 @@ with col2:
                 encoded_wa = urllib.parse.quote(wa_text)
                 st.markdown(f'<a href="https://wa.me/?text={encoded_wa}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold;">💬 Share on WhatsApp</button></a>', unsafe_allow_html=True)
 
-            # ----------------- DETAILED RECORDS & DIRECT EDIT/DELETE -----------------
+            # ----------------- DETAILED RECORDS & UNLOCKED EDIT/DELETE -----------------
             st.markdown("#### 📋 Detailed Records & Quick Corrections (Selected Date)")
             st.dataframe(df_filtered.drop(columns=["ID"]), use_container_width=True)
             
-            # Direct Edit / Delete & Recycle Bin - Always visible below table
             st.markdown("---")
-            st.markdown("### ⚙️ Quick Edit, Delete Entry & Recycle Bin")
-            
-            if not st.session_state["authenticated"]:
-                st.warning("⚠️ **Admin Login Required:** Please enter the password in the left Sidebar to enable Edit, Delete & Recycle Bin options.")
+            st.markdown("### ⚙️ Unlocked Quick Edit, Delete & Recycle Bin")
             
             sub_tab1, sub_tab2 = st.tabs(["✏️ Edit / Delete Entry", "🗑️ Recycle Bin"])
             
             with sub_tab1:
-                if st.session_state["authenticated"]:
-                    edit_id = st.selectbox("Select Entry to Edit/Delete", ["Select"] + list(df_filtered["ID"].astype(str)), key="direct_edit_sel")
-                    if edit_id != "Select":
-                        row_data = df[df["ID"] == edit_id].iloc[0]
+                edit_id = st.selectbox("Select Entry to Edit/Delete (by Piklist & Time)", ["Select"] + list(df_filtered["ID"].astype(str)), key="direct_edit_sel")
+                if edit_id != "Select":
+                    row_data = df[df["ID"] == edit_id].iloc[0]
+                    
+                    with st.form("direct_edit_form"):
+                        new_pik = st.text_input("Piklist No. (Sankhiya)", value=str(row_data["Piklist No."]))
                         
-                        with st.form("direct_edit_form"):
-                            new_pik = st.text_input("Piklist No.", value=str(row_data["Piklist No."]))
-                            new_status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"], index=["Completed", "Pending", "In Progress", "Error"].index(row_data["Status"]) if row_data["Status"] in ["Completed", "Pending", "In Progress", "Error"] else 0)
-                            new_count = st.number_input("Parcel/Item Count", min_value=1, step=1, value=int(row_data["Parcel Count"]))
+                        # Courier list for editing
+                        current_courier_val = row_data["Courier"] if row_data["Courier"] in st.session_state["couriers"] else "Delhivery"
+                        new_cour = st.selectbox("Courier Name", st.session_state["couriers"], index=st.session_state["couriers"].index(current_courier_val) if current_courier_val in st.session_state["couriers"] else 0)
+                        
+                        new_status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"], index=["Completed", "Pending", "In Progress", "Error"].index(row_data["Status"]) if row_data["Status"] in ["Completed", "Pending", "In Progress", "Error"] else 0)
+                        
+                        new_count = st.number_input("Parcel / Counting", min_value=1, step=1, value=int(row_data["Parcel Count"]))
+                        
+                        col_e1, col_e2 = st.columns(2)
+                        update_btn = col_e1.form_submit_button("Save Changes")
+                        delete_btn = col_e2.form_submit_button("Delete Entry")
+                        
+                        if update_btn:
+                            idx = df[df["ID"] == edit_id].index[0]
+                            st.session_state["data"].loc[idx, "Piklist No."] = str(new_pik)
+                            st.session_state["data"].loc[idx, "Courier"] = new_cour
+                            st.session_state["data"].loc[idx, "Status"] = new_status
+                            st.session_state["data"].loc[idx, "Parcel Count"] = int(new_count)
+                            save_data(st.session_state["data"])
+                            st.success("Entry updated successfully!")
+                            st.rerun()
                             
-                            col_e1, col_e2 = st.columns(2)
-                            update_btn = col_e1.form_submit_button("Save Changes")
-                            delete_btn = col_e2.form_submit_button("Delete Entry")
-                            
-                            if update_btn:
-                                idx = df[df["ID"] == edit_id].index[0]
-                                st.session_state["data"].loc[idx, "Piklist No."] = new_pik
-                                st.session_state["data"].loc[idx, "Status"] = new_status
-                                st.session_state["data"].loc[idx, "Parcel Count"] = int(new_count)
-                                save_data(st.session_state["data"])
-                                st.success("Entry updated successfully!")
-                                st.rerun()
-                                
-                            if delete_btn:
-                                if row_data["Task Type"] == "Manifest":
-                                    rep_df = st.session_state["dispatch_reports"]
-                                    r_date = row_data["Date"]
-                                    r_courier = row_data["Courier"]
-                                    r_count = int(row_data["Parcel Count"])
-                                    
-                                    ex_row = rep_df[(rep_df["Date"] == r_date) & (rep_df["Courier"] == r_courier)]
-                                    if not ex_row.empty:
-                                        ridx = ex_row.index[0]
-                                        st.session_state["dispatch_reports"].loc[ridx, "Manifest"] = max(0, int(st.session_state["dispatch_reports"].loc[ridx, "Manifest"]) - r_count)
-                                        save_reports(st.session_state["dispatch_reports"])
-
-                                row_to_trash = df[df["ID"] == edit_id]
-                                st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
-                                st.session_state["data"] = df[df["ID"] != edit_id]
-                                save_data(st.session_state["data"])
-                                st.success("Entry moved to Recycle Bin successfully!")
-                                st.rerun()
-                else:
-                    st.info("🔒 Login from the sidebar to unlock editing.")
+                        if delete_btn:
+                            row_to_trash = df[df["ID"] == edit_id]
+                            st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
+                            st.session_state["data"] = df[df["ID"] != edit_id]
+                            save_data(st.session_state["data"])
+                            st.success("Entry deleted and moved to Recycle Bin successfully!")
+                            st.rerun()
                     
             with sub_tab2:
-                if st.session_state["authenticated"]:
-                    trash_df = st.session_state["trash"]
-                    if not trash_df.empty:
-                        st.dataframe(trash_df.drop(columns=["ID"]), use_container_width=True)
-                        
-                        restore_id = st.selectbox("Select Entry ID to Restore", ["Select"] + list(trash_df["ID"].astype(str)), key="direct_restore_sel")
-                        if restore_id != "Select":
-                            if st.button("Restore Entry"):
-                                row_to_restore = trash_df[trash_df["ID"] == restore_id]
-                                st.session_state["data"] = pd.concat([st.session_state["data"], row_to_restore], ignore_index=True)
-                                st.session_state["trash"] = trash_df[trash_df["ID"] != restore_id]
-                                save_data(st.session_state["data"])
-                                st.success("Entry restored successfully!")
-                                st.rerun()
-                    else:
-                        st.info("Recycle Bin is empty.")
+                trash_df = st.session_state["trash"]
+                if not trash_df.empty:
+                    st.dataframe(trash_df.drop(columns=["ID"]), use_container_width=True)
+                    
+                    restore_id = st.selectbox("Select Entry ID to Restore", ["Select"] + list(trash_df["ID"].astype(str)), key="direct_restore_sel")
+                    if restore_id != "Select":
+                        if st.button("Restore Entry"):
+                            row_to_restore = trash_df[trash_df["ID"] == restore_id]
+                            st.session_state["data"] = pd.concat([st.session_state["data"], row_to_restore], ignore_index=True)
+                            st.session_state["trash"] = trash_df[trash_df["ID"] != restore_id]
+                            save_data(st.session_state["data"])
+                            st.success("Entry restored successfully!")
+                            st.rerun()
                 else:
-                    st.info("🔒 Login from the sidebar to view Recycle Bin.")
+                    st.info("Recycle Bin is empty.")
         else:
             st.info(f"No entries found for {selected_date_str}.")
     else:
