@@ -314,35 +314,48 @@ with col2:
             
             st.dataframe(report_table_df, use_container_width=True)
             
-            # Manual Update Form for Dispatch, Cancel, & Remarks
-            with st.form("update_dispatch_form"):
-                st.markdown("##### ✍️ Update Dispatch / Cancel / Remarks")
-                up_courier = st.selectbox("Select Courier to Update", st.session_state["couriers"])
-                up_cancel = st.number_input("Cancel Count", min_value=0, step=1, value=0)
-                up_dispatch = st.number_input("Dispatch Count (Manual)", min_value=0, step=1, value=0)
-                up_remark = st.text_input("Remark")
+            # ----------------- NEW: EDIT / CORRECT COURIER REPORT FORM -----------------
+            with st.form("edit_courier_report_form"):
+                st.markdown("##### ✏️ Edit / Correct Courier Counting & Report")
+                edit_courier_sel = st.selectbox("Select Courier to Correct", st.session_state["couriers"])
                 
-                if st.form_submit_button("Save Report Update"):
+                # Fetch existing values for selected courier on selected date
+                cur_man_val, cur_can_val, cur_dis_val, cur_rem_val = 0, 0, 0, ""
+                if not rep_data.empty:
+                    match_row = rep_data[(rep_data["Date"] == selected_date_str) & (rep_data["Courier"] == edit_courier_sel)]
+                    if not match_row.empty:
+                        cur_man_val = int(match_row["Manifest"].values[0])
+                        cur_can_val = int(match_row["Cancel"].values[0])
+                        cur_dis_val = int(match_row["Dispatch"].values[0])
+                        cur_rem_val = str(match_row["Remark"].values[0]) if pd.notna(match_row["Remark"].values[0]) else ""
+                
+                new_man_input = st.number_input("Corrected Manifest (Courier Counting)", min_value=0, step=1, value=cur_man_val)
+                new_can_input = st.number_input("Corrected Cancel Count", min_value=0, step=1, value=cur_can_val)
+                new_dis_input = st.number_input("Corrected Dispatch Count", min_value=0, step=1, value=cur_dis_val)
+                new_rem_input = st.text_input("Corrected Remark", value=cur_rem_val)
+                
+                if st.form_submit_button("Save Courier Correction"):
                     rep_df = st.session_state["dispatch_reports"]
-                    existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == up_courier)]
+                    existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == edit_courier_sel)]
                     if not existing_row.empty:
                         idx = existing_row.index[0]
-                        st.session_state["dispatch_reports"].loc[idx, "Cancel"] = int(up_cancel)
-                        st.session_state["dispatch_reports"].loc[idx, "Dispatch"] = int(up_dispatch)
-                        st.session_state["dispatch_reports"].loc[idx, "Remark"] = up_remark
+                        st.session_state["dispatch_reports"].loc[idx, "Manifest"] = int(new_man_input)
+                        st.session_state["dispatch_reports"].loc[idx, "Cancel"] = int(new_can_input)
+                        st.session_state["dispatch_reports"].loc[idx, "Dispatch"] = int(new_dis_input)
+                        st.session_state["dispatch_reports"].loc[idx, "Remark"] = new_rem_input
                     else:
                         new_rep = pd.DataFrame({
                             "Date": [selected_date_str],
-                            "Courier": [up_courier],
-                            "Manifest": [0],
-                            "Cancel": [int(up_cancel)],
-                            "Dispatch": [int(up_dispatch)],
-                            "Remark": [up_remark]
+                            "Courier": [edit_courier_sel],
+                            "Manifest": [int(new_man_input)],
+                            "Cancel": [int(new_can_input)],
+                            "Dispatch": [int(new_dis_input)],
+                            "Remark": [new_rem_input]
                         })
                         st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
                     
                     save_reports(st.session_state["dispatch_reports"])
-                    st.success("Dispatch report updated successfully!")
+                    st.success(f"Courier report for {edit_courier_sel} updated successfully!")
                     st.rerun()
 
             # Export & WhatsApp Sharing Options
@@ -369,18 +382,18 @@ with col2:
             st.markdown("#### 📋 Detailed Records & Quick Corrections (Selected Date)")
             st.dataframe(df_filtered.drop(columns=["ID"]), use_container_width=True)
             
-            # Direct Edit / Delete & Recycle Bin right under Detailed Records
+            # Direct Edit / Delete & Recycle Bin - Always visible below table
             st.markdown("---")
-            st.markdown("### ⚙️ Quick Edit, Delete & Recycle Bin")
+            st.markdown("### ⚙️ Quick Edit, Delete Entry & Recycle Bin")
             
             if not st.session_state["authenticated"]:
-                st.warning("⚠️ Please login from the sidebar (Admin Panel) to Edit or Delete entries.")
+                st.warning("⚠️ **Admin Login Required:** Please enter the password in the left Sidebar to enable Edit, Delete & Recycle Bin options.")
             
             sub_tab1, sub_tab2 = st.tabs(["✏️ Edit / Delete Entry", "🗑️ Recycle Bin"])
             
             with sub_tab1:
                 if st.session_state["authenticated"]:
-                    edit_id = st.selectbox("Select Entry to Edit/Delete (by Piklist & Timestamp)", ["Select"] + list(df_filtered["ID"].astype(str)), key="direct_edit_sel")
+                    edit_id = st.selectbox("Select Entry to Edit/Delete", ["Select"] + list(df_filtered["ID"].astype(str)), key="direct_edit_sel")
                     if edit_id != "Select":
                         row_data = df[df["ID"] == edit_id].iloc[0]
                         
@@ -422,7 +435,7 @@ with col2:
                                 st.success("Entry moved to Recycle Bin successfully!")
                                 st.rerun()
                 else:
-                    st.error("🔒 Please Login using the Sidebar Admin Panel to access Edit and Delete options.")
+                    st.info("🔒 Login from the sidebar to unlock editing.")
                     
             with sub_tab2:
                 if st.session_state["authenticated"]:
@@ -442,7 +455,7 @@ with col2:
                     else:
                         st.info("Recycle Bin is empty.")
                 else:
-                    st.error("🔒 Please Login using the Sidebar Admin Panel to view Recycle Bin.")
+                    st.info("🔒 Login from the sidebar to view Recycle Bin.")
         else:
             st.info(f"No entries found for {selected_date_str}.")
     else:
