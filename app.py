@@ -38,7 +38,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# ----------------- DATA STORAGE FILES (FRESH START) -----------------
+# ----------------- DATA STORAGE FILES -----------------
 DATA_FILE = "warehouse_entries.csv"
 REPORT_FILE = "dispatch_reports.csv"
 
@@ -370,25 +370,56 @@ with col2:
 
     # ----------------- TABLE 2: DETAILED RECORDS (PIKLIST & EMPLOYEE WISE) -----------------
     st.markdown("---")
-    st.markdown(f"#### 📋 2. Detailed Records & Piklist Wise Entries ({selected_date_str})")
+    st.markdown(f"#### 📋 2. Detailed Records & Quick Corrections ({selected_date_str})")
     
     if not df.empty:
-        df_filtered = df[df["Date"] == selected_date_str]
+        df_filtered = df[df["Date"] == selected_date_str].copy()
         if not df_filtered.empty:
-            st.dataframe(df_filtered.drop(columns=["ID"]), use_container_width=True)
+            # Drop internal ID for clean display, keep editable columns
+            display_df = df_filtered.drop(columns=["ID"])
             
-            # Download Detailed Records Excel Button
-            csv_data_det = df_filtered.drop(columns=["ID"]).to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 Download Detailed Entries (Excel/CSV)",
-                data=csv_data_det,
-                file_name=f"Detailed_Entries_{selected_date_str}.csv",
-                mime="text/csv",
+            st.info("💡 Tip: Aap neeche table me direct bhi click karke edit kar sakte hain, ya phir form se badal sakte hain.")
+            
+            # Interactive Data Editor for Smooth Editing
+            edited_df = st.data_editor(
+                display_df,
+                use_container_width=True,
+                key="detailed_data_editor",
+                num_rows="fixed"
             )
             
-            # Home Page Quick Correction / Edit Option for Entries
+            col_save_changes, col_dl_det = st.columns(2)
+            
+            with col_save_changes:
+                if st.button("💾 Save Table Changes"):
+                    # Update main session state with edited values
+                    for idx, row in edited_df.iterrows():
+                        orig_id = df_filtered.iloc[idx]["ID"]
+                        main_idx = st.session_state["data"][st.session_state["data"]["ID"] == orig_id].index[0]
+                        st.session_state["data"].loc[main_idx, "Piklist No."] = str(row["Piklist No."])
+                        st.session_state["data"].loc[main_idx, "Employee Name"] = row["Employee Name"]
+                        st.session_state["data"].loc[main_idx, "Task Type"] = row["Task Type"]
+                        st.session_state["data"].loc[main_idx, "Courier"] = row["Courier"]
+                        st.session_state["data"].loc[main_idx, "Parcel Count"] = int(row["Parcel Count"])
+                        st.session_state["data"].loc[main_idx, "Status"] = row["Status"]
+                        st.session_state["data"].loc[main_idx, "Mistake / Error"] = row["Mistake / Error"]
+                    
+                    save_data(st.session_state["data"])
+                    st.success("Detailed records updated successfully!")
+                    st.rerun()
+                    
+            with col_dl_det:
+                csv_data_det = display_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Download Detailed Entries (Excel/CSV)",
+                    data=csv_data_det,
+                    file_name=f"Detailed_Entries_{selected_date_str}.csv",
+                    mime="text/csv",
+                )
+            
+            # Alternative Quick Select Form for Editing Specific Rows easily on Mobile
             with st.form("home_quick_edit_form"):
-                st.markdown("##### ✏️ Correct / Edit Specific Entry (Piklist, Courier, Count)")
+                st.markdown("##### ✏️ Select & Modify Specific Entry")
                 entry_ids_list = list(df_filtered["ID"].astype(str))
                 selected_edit_id = st.selectbox("Select Entry to Modify (by Piklist & Employee)", entry_ids_list, format_func=lambda x: f"Piklist: {df_filtered[df_filtered['ID'].astype(str) == x]['Piklist No.'].values[0]} | Emp: {df_filtered[df_filtered['ID'].astype(str) == x]['Employee Name'].values[0]}")
                 
@@ -404,7 +435,7 @@ with col2:
                 curr_stat = row_data["Status"] if row_data["Status"] in ["Completed", "Pending", "In Progress", "Error"] else "Completed"
                 new_stat_val = st.selectbox("Corrected Status", ["Completed", "Pending", "In Progress", "Error"], index=["Completed", "Pending", "In Progress", "Error"].index(curr_stat))
                 
-                if st.form_submit_button("Update Entry Details"):
+                if st.form_submit_button("Update Selected Entry"):
                     main_idx = st.session_state["data"][st.session_state["data"]["ID"].astype(str) == selected_edit_id].index[0]
                     st.session_state["data"].loc[main_idx, "Piklist No."] = str(new_pik_val)
                     st.session_state["data"].loc[main_idx, "Courier"] = new_cour_val
