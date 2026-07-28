@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 from datetime import date, timedelta
 import urllib.parse
+import os
 
 # Page Configuration & Professional Theme
 st.set_page_config(page_title="DELHIVERY – IDRFC6 Warehouse Tracker", layout="wide")
@@ -37,6 +38,32 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
+# ----------------- PERMANENT DATA STORAGE FILES -----------------
+DATA_FILE = "warehouse_entries.csv"
+REPORT_FILE = "dispatch_reports.csv"
+
+def load_data():
+    if os.path.exists(DATA_FILE):
+        return pd.read_csv(DATA_FILE)
+    else:
+        return pd.DataFrame(columns=[
+            "ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Parcel Count", "Status", "Mistake / Error"
+        ])
+
+def save_data(df):
+    df.to_csv(DATA_FILE, index=False)
+
+def load_reports():
+    if os.path.exists(REPORT_FILE):
+        return pd.read_csv(REPORT_FILE)
+    else:
+        return pd.DataFrame(columns=[
+            "Date", "Courier", "Manifest", "Cancel", "Dispatch", "Remark"
+        ])
+
+def save_reports(df):
+    df.to_csv(REPORT_FILE, index=False)
+
 # ----------------- SESSION STATES -----------------
 if "admin_password" not in st.session_state:
     st.session_state["admin_password"] = "122436"
@@ -45,20 +72,13 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if "data" not in st.session_state:
-    st.session_state["data"] = pd.DataFrame(columns=[
-        "ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Parcel Count", "Status", "Mistake / Error"
-    ])
+    st.session_state["data"] = load_data()
 
 if "dispatch_reports" not in st.session_state:
-    # Stores daily summary for Courier Report Table: Date, Courier, Manifest, Cancel, Dispatch, Pending, Remark
-    st.session_state["dispatch_reports"] = pd.DataFrame(columns=[
-        "Date", "Courier", "Manifest", "Cancel", "Dispatch", "Remark"
-    ])
+    st.session_state["dispatch_reports"] = load_reports()
 
 if "trash" not in st.session_state:
-    st.session_state["trash"] = pd.DataFrame(columns=[
-        "ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Employee ID", "Task Type", "Courier", "Parcel Count", "Status", "Mistake / Error"
-    ])
+    st.session_state["trash"] = pd.DataFrame(columns=st.session_state["data"].columns)
 
 if "employees" not in st.session_state:
     st.session_state["employees"] = {
@@ -108,7 +128,7 @@ selected_date = st.sidebar.date_input("Select Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-# Admin Master Management (Add/Delete Employee & Courier)
+# Admin Master Management
 if st.session_state["authenticated"]:
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Master Management")
@@ -177,8 +197,9 @@ with col1:
                     "Mistake / Error": [mistake]
                 })
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
+                save_data(st.session_state["data"])
                 
-                # Automatically update or insert into Dispatch Report (Manifest counting from task)
+                # Automatically update or insert into Dispatch Report
                 if task_type == "Manifest":
                     rep_df = st.session_state["dispatch_reports"]
                     existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
@@ -195,8 +216,10 @@ with col1:
                             "Remark": [""]
                         })
                         st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
+                    save_reports(st.session_state["dispatch_reports"])
                         
                 st.success("Entry Saved Successfully!")
+                st.rerun()
             else:
                 st.error("Please fill Piklist No. and select Employee Name.")
 
@@ -212,25 +235,21 @@ with col2:
             total_parcels = df_filtered["Parcel Count"].sum()
             st.metric(label="📦 Total Parcels Logged on Selected Date", value=total_parcels)
             
-            # ----------------- COURIER DISPATCH REPORT TABLE (IMAGE FORMAT) -----------------
+            # ----------------- COURIER DISPATCH REPORT TABLE -----------------
             st.markdown(f"#### 📋 Courier Dispatch Report — {selected_date_str}")
             
-            # Calculate Yesterday's Pending for each courier
             all_couriers = st.session_state["couriers"]
             rep_data = st.session_state["dispatch_reports"]
             
-            # Get yesterday pending map
             yesterday_pending_map = {}
             if not rep_data.empty:
                 yest_df = rep_data[rep_data["Date"] == yesterday_str]
                 for c in all_couriers:
-                    # Calculate yesterday's pending = Manifest + Yesterday Pending - Cancel - Dispatch
                     c_row = yest_df[yest_df["Courier"] == c]
                     if not c_row.empty:
                         man = c_row["Manifest"].values[0]
                         can = c_row["Cancel"].values[0]
                         dis = c_row["Dispatch"].values[0]
-                        # check if there was older pending too
                         yesterday_pending_map[c] = max(0, man - can - dis)
                     else:
                         yesterday_pending_map[c] = 0
@@ -238,7 +257,6 @@ with col2:
                 for c in all_couriers:
                     yesterday_pending_map[c] = 0
 
-            # Build current date report presentation table
             current_rep = rep_data[rep_data["Date"] == selected_date_str] if not rep_data.empty else pd.DataFrame()
             
             display_rows = []
@@ -250,7 +268,6 @@ with col2:
                 rem = str(c_data["Remark"].values[0]) if not c_data.empty and pd.notna(c_data["Remark"].values[0]) else ""
                 yest_pend = yesterday_pending_map.get(c, 0)
                 
-                # Pending = (Manifest + Yesterday Pending) - Cancel - Dispatch
                 pending = max(0, (man + yest_pend) - can - dis)
                 
                 display_rows.append({
@@ -265,7 +282,6 @@ with col2:
                 
             report_table_df = pd.DataFrame(display_rows)
             
-            # Add Total Row
             tot_yest = report_table_df["Yesterday Pending"].sum()
             tot_man = report_table_df["Manifest"].sum()
             tot_can = report_table_df["Cancel"].sum()
@@ -311,12 +327,14 @@ with col2:
                             "Remark": [up_remark]
                         })
                         st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
+                    
+                    save_reports(st.session_state["dispatch_reports"])
                     st.success("Dispatch report updated successfully!")
                     st.rerun()
 
-            # Export, Print & WhatsApp Sharing Options
-            st.markdown("#### 📥 Export, Print & Share Options")
-            col_csv, col_print, col_wa = st.columns(3)
+            # Export & WhatsApp Sharing Options
+            st.markdown("#### 📥 Export & Share Options")
+            col_csv, col_wa = st.columns(2)
             
             with col_csv:
                 csv_data = report_table_df.to_csv(index=False).encode('utf-8')
@@ -327,10 +345,6 @@ with col2:
                     mime="text/csv",
                 )
                 
-            with col_print:
-                if st.button("🖨️ Print Report View"):
-                    st.toast("Press Ctrl + P in your browser to print cleanly.")
-                    
             with col_wa:
                 wa_text = f"*📦 DELHIVERY - IDRFC6 Dispatch Report* \n*Date:* {selected_date_str}\n\n"
                 for _, r in report_table_df.iterrows():
@@ -338,22 +352,7 @@ with col2:
                 encoded_wa = urllib.parse.quote(wa_text)
                 st.markdown(f'<a href="https://wa.me/?text={encoded_wa}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:8px; border-radius:5px; font-weight:bold;">💬 Share on WhatsApp</button></a>', unsafe_allow_html=True)
 
-            # Detailed Logs with Safe Editing Option
-            st.markdown("#### 📋 Detailed Records & Quick Edit (Selected Date)")
-            edit_entry_id = st.selectbox("Select Entry ID to Edit Status/Count", ["Select"] + list(df_filtered["ID"].astype(str)))
-            if edit_entry_id != "Select":
-                row_idx = df[df["ID"] == edit_entry_id].index[0]
-                with st.form("edit_form"):
-                    st.write(f"Editing Entry: Piklist **{df.loc[row_idx, 'Piklist No.']}** | Employee **{df.loc[row_idx, 'Employee Name']}**")
-                    new_count = st.number_input("Update Parcel Count", value=int(df.loc[row_idx, 'Parcel Count']))
-                    new_status = st.selectbox("Update Status", ["Completed", "Pending", "In Progress", "Error"], index=["Completed", "Pending", "In Progress", "Error"].index(df.loc[row_idx, 'Status']))
-                    
-                    if st.form_submit_button("Save Changes"):
-                        st.session_state["data"].loc[row_idx, 'Parcel Count'] = new_count
-                        st.session_state["data"].loc[row_idx, 'Status'] = new_status
-                        st.success("Entry Updated Successfully!")
-                        st.rerun()
-
+            st.markdown("#### 📋 Detailed Records (Selected Date)")
             st.dataframe(df_filtered.drop(columns=["ID"]), use_container_width=True)
         else:
             st.info(f"No entries found for {selected_date_str}.")
@@ -365,19 +364,20 @@ if st.session_state["authenticated"]:
     st.markdown("---")
     st.subheader("⚙️ Admin Control Panel & Recycle Bin")
     
-    admin_tab1, admin_tab2 = st.tabs(["📅 Date-to-Date Master Log", "🗑️ Recycle Bin (Restore Deleted)"])
+    admin_tab1, admin_tab2 = st.tabs(["📅 Date-to-Date Master Log", "🗑️ Recycle Bin"])
     
     with admin_tab1:
         st.markdown("#### Complete History Across All Dates")
         if not df.empty:
             st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
             
-            del_id = st.selectbox("Select Entry ID to Delete to Recycle Bin", ["Select"] + list(df["ID"].astype(str)), key="admin_del")
+            del_id = st.selectbox("Select Entry ID to Delete", ["Select"] + list(df["ID"].astype(str)), key="admin_del")
             if del_id != "Select":
                 if st.button("Move Selected Entry to Recycle Bin"):
                     row_to_trash = df[df["ID"] == del_id]
                     st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
                     st.session_state["data"] = df[df["ID"] != del_id]
+                    save_data(st.session_state["data"])
                     st.success("Entry moved to Recycle Bin safely!")
                     st.rerun()
         else:
@@ -387,7 +387,7 @@ if st.session_state["authenticated"]:
         st.markdown("#### Deleted Entries (Recycle Bin)")
         trash_df = st.session_state["trash"]
         if not trash_df.empty:
-            st.dataframe(trash_df.drop(columns=["ID"]), use_container_width=True)
+            st.dataframe(trash_df.drop(columns=["ID"]), use_count=True)
             
             restore_id = st.selectbox("Select Entry ID to Restore", ["Select"] + list(trash_df["ID"].astype(str)), key="restore_sel")
             if restore_id != "Select":
@@ -395,6 +395,7 @@ if st.session_state["authenticated"]:
                     row_to_restore = trash_df[trash_df["ID"] == restore_id]
                     st.session_state["data"] = pd.concat([st.session_state["data"], row_to_restore], ignore_index=True)
                     st.session_state["trash"] = trash_df[trash_df["ID"] != restore_id]
+                    save_data(st.session_state["data"])
                     st.success("Entry restored successfully!")
                     st.rerun()
         else:
