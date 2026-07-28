@@ -80,7 +80,7 @@ if "dispatch_reports" not in st.session_state:
 if "trash" not in st.session_state:
     st.session_state["trash"] = pd.DataFrame(columns=st.session_state["data"].columns)
 
-# Permanent Employee List as requested
+# Permanent Employee List
 if "employees" not in st.session_state:
     st.session_state["employees"] = {
         "AJAY PATEL": "W222449",
@@ -112,7 +112,7 @@ if "couriers" not in st.session_state:
 st.sidebar.header("🔐 Admin Panel & Security")
 
 if not st.session_state["authenticated"]:
-    password_input = st.sidebar.text_input("Enter Admin Password", type="password")
+    password_input = st.sidebar.text_input("Enter Admin Password", type="password", key="login_pass")
     if st.sidebar.button("Login"):
         if password_input == st.session_state["admin_password"]:
             st.session_state["authenticated"] = True
@@ -128,8 +128,8 @@ else:
         
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔑 Change Password")
-    old_p = st.sidebar.text_input("Current Password", type="password")
-    new_p = st.sidebar.text_input("New Password", type="password")
+    old_p = st.sidebar.text_input("Current Password", type="password", key="old_pass")
+    new_p = st.sidebar.text_input("New Password", type="password", key="new_pass")
     if st.sidebar.button("Update Password"):
         if old_p == st.session_state["admin_password"]:
             if new_p:
@@ -145,20 +145,20 @@ selected_date = st.sidebar.date_input("Select Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-# Admin Master Management for Extra Employees / Couriers
+# Admin Master Management
 if st.session_state["authenticated"]:
     st.sidebar.markdown("---")
     st.sidebar.subheader("⚙️ Master Management")
     
-    new_emp_name = st.sidebar.text_input("Extra Employee Name")
-    new_emp_id = st.sidebar.text_input("Extra Employee ID")
+    new_emp_name = st.sidebar.text_input("Extra Employee Name", key="new_emp_name_input")
+    new_emp_id = st.sidebar.text_input("Extra Employee ID", key="new_emp_id_input")
     if st.sidebar.button("Add Employee"):
         if new_emp_name and new_emp_id:
             st.session_state["employees"][new_emp_name] = new_emp_id
             st.sidebar.success(f"Employee {new_emp_name} added!")
             
     st.sidebar.markdown("---")
-    new_courier = st.sidebar.text_input("New Courier Name")
+    new_courier = st.sidebar.text_input("New Courier Name", key="new_courier_input")
     if st.sidebar.button("Add Courier"):
         if new_courier and new_courier not in st.session_state["couriers"]:
             st.session_state["couriers"].append(new_courier)
@@ -170,73 +170,74 @@ col1, col2 = st.columns([1, 1.4])
 with col1:
     st.markdown(f"### 📝 Entry Form ({selected_date_str})")
     
-    with st.form("entry_form", clear_on_submit=True):
-        piklist_no = st.text_input("Piklist No.")
+    piklist_no = st.text_input("Piklist No.")
+    
+    emp_names_list = ["Select Employee"] + list(st.session_state["employees"].keys())
+    emp_name = st.selectbox("Employee Name", emp_names_list)
+    
+    # Auto-fill ID that displays instantly as soon as employee is selected
+    auto_emp_id = st.session_state["employees"].get(emp_name, "") if emp_name != "Select Employee" else ""
+    if emp_name != "Select Employee":
+        st.info(f"🆔 Employee ID: **{auto_emp_id}**")
+    
+    task_type = st.selectbox("Task Type", ["Picking", "Scanning", "Packing", "Manifest", "Loading", "Free"])
+    
+    # Courier appears ONLY when task_type is Manifest
+    courier = "N/A"
+    parcel_count = 1
+    if task_type == "Manifest":
+        courier = st.selectbox("Courier", st.session_state["couriers"])
+        parcel_count = st.number_input("Parcel Count (Quantity)", min_value=1, step=1, value=1, key="parcels_man")
+    else:
+        parcel_count = st.number_input("Parcel Count / Item Count", min_value=1, step=1, value=1, key="parcels_other")
         
-        emp_names_list = ["Select Employee"] + list(st.session_state["employees"].keys())
-        emp_name = st.selectbox("Employee Name", emp_names_list)
-        
-        auto_emp_id = st.session_state["employees"].get(emp_name, "") if emp_name != "Select Employee" else ""
-        emp_id = st.text_input("Employee ID (Auto-filled)", value=auto_emp_id, disabled=True)
-        
-        task_type = st.selectbox("Task Type", ["Picking", "Scanning", "Packing", "Manifest", "Loading", "Free"])
-        
-        # Courier will appear ONLY when task_type is Manifest
-        courier = "N/A"
-        parcel_count = 1
-        if task_type == "Manifest":
-            courier = st.selectbox("Courier", st.session_state["couriers"])
-            parcel_count = st.number_input("Parcel Count (Quantity)", min_value=1, step=1, value=1)
-        else:
-            parcel_count = st.number_input("Parcel Count / Item Count", min_value=1, step=1, value=1)
+    status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"])
+    mistake = st.selectbox("Mistake / Error", ["None", "Wrong Item", "Missing Item", "Tag Damage", "Wrong Scanning"])
+    
+    submit = st.button("Submit Entry")
+    
+    if submit:
+        if piklist_no and emp_name != "Select Employee":
+            entry_id = str(pd.Timestamp.now().timestamp())
+            new_row = pd.DataFrame({
+                "ID": [entry_id],
+                "Date": [selected_date_str],
+                "Timestamp": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")],
+                "Piklist No.": [piklist_no],
+                "Employee Name": [emp_name],
+                "Employee ID": [auto_emp_id],
+                "Task Type": [task_type],
+                "Courier": [courier],
+                "Parcel Count": [int(parcel_count)],
+                "Status": [status],
+                "Mistake / Error": [mistake]
+            })
+            st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
+            save_data(st.session_state["data"])
             
-        status = st.selectbox("Status", ["Completed", "Pending", "In Progress", "Error"])
-        mistake = st.selectbox("Mistake / Error", ["None", "Wrong Item", "Missing Item", "Tag Damage", "Wrong Scanning"])
-        
-        submit = st.form_submit_button("Submit Entry")
-        
-        if submit:
-            if piklist_no and emp_name != "Select Employee":
-                entry_id = str(pd.Timestamp.now().timestamp())
-                new_row = pd.DataFrame({
-                    "ID": [entry_id],
-                    "Date": [selected_date_str],
-                    "Timestamp": [pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")],
-                    "Piklist No.": [piklist_no],
-                    "Employee Name": [emp_name],
-                    "Employee ID": [auto_emp_id],
-                    "Task Type": [task_type],
-                    "Courier": [courier],
-                    "Parcel Count": [int(parcel_count)],
-                    "Status": [status],
-                    "Mistake / Error": [mistake]
-                })
-                st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
-                save_data(st.session_state["data"])
-                
-                # Automatically update or insert into Dispatch Report if Manifest
-                if task_type == "Manifest":
-                    rep_df = st.session_state["dispatch_reports"]
-                    existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
-                    if not existing_row.empty:
-                        idx = existing_row.index[0]
-                        st.session_state["dispatch_reports"].loc[idx, "Manifest"] += int(parcel_count)
-                    else:
-                        new_rep = pd.DataFrame({
-                            "Date": [selected_date_str],
-                            "Courier": [courier],
-                            "Manifest": [int(parcel_count)],
-                            "Cancel": [0],
-                            "Dispatch": [0],
-                            "Remark": [""]
-                        })
-                        st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
-                    save_reports(st.session_state["dispatch_reports"])
-                        
-                st.success("Entry Saved Successfully!")
-                st.rerun()
-            else:
-                st.error("Please fill Piklist No. and select Employee Name.")
+            # Automatically update or insert into Dispatch Report if Manifest
+            if task_type == "Manifest":
+                rep_df = st.session_state["dispatch_reports"]
+                existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
+                if not existing_row.empty:
+                    idx = existing_row.index[0]
+                    st.session_state["dispatch_reports"].loc[idx, "Manifest"] += int(parcel_count)
+                else:
+                    new_rep = pd.DataFrame({
+                        "Date": [selected_date_str],
+                        "Courier": [courier],
+                        "Manifest": [int(parcel_count)],
+                        "Cancel": [0],
+                        "Dispatch": [0],
+                        "Remark": [""]
+                    })
+                    st.session_state["dispatch_reports"] = pd.concat([st.session_state["dispatch_reports"], new_rep], ignore_index=True)
+                save_reports(st.session_state["dispatch_reports"])
+                    
+            st.success("Entry Saved Successfully!")
+            st.rerun()
+        else:
+            st.error("Please fill Piklist No. and select Employee Name.")
 
 with col2:
     st.markdown(f"### 📊 Live Dashboard & Reports ({selected_date_str})")
