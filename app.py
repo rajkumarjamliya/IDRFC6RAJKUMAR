@@ -175,14 +175,12 @@ with col1:
     emp_names_list = ["Select Employee"] + list(st.session_state["employees"].keys())
     emp_name = st.selectbox("Employee Name", emp_names_list)
     
-    # Auto-fill ID that displays instantly as soon as employee is selected
     auto_emp_id = st.session_state["employees"].get(emp_name, "") if emp_name != "Select Employee" else ""
     if emp_name != "Select Employee":
         st.info(f"🆔 Employee ID: **{auto_emp_id}**")
     
     task_type = st.selectbox("Task Type", ["Picking", "Scanning", "Packing", "Manifest", "Loading", "Free"])
     
-    # Courier appears ONLY when task_type is Manifest
     courier = "N/A"
     parcel_count = 1
     if task_type == "Manifest":
@@ -248,7 +246,7 @@ with col2:
         df_filtered = df[df["Date"] == selected_date_str]
         
         if not df_filtered.empty:
-            total_parcels = df_filtered["Parcel Count"].sum()
+            total_parcels = int(df_filtered["Parcel Count"].sum())
             st.metric(label="📦 Total Entries / Count on Selected Date", value=total_parcels)
             
             # ----------------- COURIER DISPATCH REPORT TABLE -----------------
@@ -415,6 +413,19 @@ if st.session_state["authenticated"]:
                         st.rerun()
                         
                     if delete_btn:
+                        # If deleted entry was Manifest, reduce from dispatch reports
+                        if row_data["Task Type"] == "Manifest":
+                            rep_df = st.session_state["dispatch_reports"]
+                            r_date = row_data["Date"]
+                            r_courier = row_data["Courier"]
+                            r_count = int(row_data["Parcel Count"])
+                            
+                            ex_row = rep_df[(rep_df["Date"] == r_date) & (rep_df["Courier"] == r_courier)]
+                            if not ex_row.empty:
+                                ridx = ex_row.index[0]
+                                st.session_state["dispatch_reports"].loc[ridx, "Manifest"] = max(0, int(st.session_state["dispatch_reports"].loc[ridx, "Manifest"]) - r_count)
+                                save_reports(st.session_state["dispatch_reports"])
+
                         row_to_trash = df[df["ID"] == edit_id]
                         st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
                         st.session_state["data"] = df[df["ID"] != edit_id]
