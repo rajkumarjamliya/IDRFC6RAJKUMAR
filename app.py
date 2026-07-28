@@ -213,7 +213,6 @@ with col1:
             st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
             save_data(st.session_state["data"])
             
-            # Automatically update or insert into Dispatch Report if Manifest
             if task_type == "Manifest":
                 rep_df = st.session_state["dispatch_reports"]
                 existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
@@ -247,7 +246,7 @@ with col2:
         
         if not df_filtered.empty:
             total_parcels = int(df_filtered["Parcel Count"].sum())
-            st.metric(label="📦 Total Entries / Count on Selected Date", value=total_parcels)
+            st.metric(label="📦 Total Parcel Count on Selected Date", value=total_parcels)
             
             # ----------------- COURIER DISPATCH REPORT TABLE -----------------
             st.markdown(f"#### 📋 Courier Dispatch Report — {selected_date_str}")
@@ -374,21 +373,24 @@ with col2:
         st.info("No entries yet. Add entries using the form.")
 
 # ----------------- ADMIN PANEL: EDIT, DELETE & RECYCLE BIN -----------------
-if st.session_state["authenticated"]:
-    st.markdown("---")
-    st.subheader("⚙️ Admin Control Panel & Entry Corrections")
-    
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📅 Date-to-Date Master Log", "✏️ Edit / Delete Entries", "🗑️ Recycle Bin"])
-    
-    with admin_tab1:
-        st.markdown("#### Complete History Across All Dates")
-        if not df.empty:
-            st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
-        else:
-            st.info("No history available.")
-            
-    with admin_tab2:
-        st.markdown("#### ✏️ Edit or Delete Any Wrong Entry")
+st.markdown("---")
+st.subheader("⚙️ Admin Control Panel & Entry Corrections")
+
+if not st.session_state["authenticated"]:
+    st.warning("⚠️ Please login from the sidebar (Admin Panel) to Delete or Edit entries.")
+
+admin_tab1, admin_tab2, admin_tab3 = st.tabs(["📅 Date-to-Date Master Log", "✏️ Edit / Delete Entries", "🗑️ Recycle Bin"])
+
+with admin_tab1:
+    st.markdown("#### Complete History Across All Dates")
+    if not df.empty:
+        st.dataframe(df.drop(columns=["ID"]), use_container_width=True)
+    else:
+        st.info("No history available.")
+        
+with admin_tab2:
+    st.markdown("#### ✏️ Edit or Delete Any Wrong Entry")
+    if st.session_state["authenticated"]:
         if not df.empty:
             edit_id = st.selectbox("Select Entry ID to Edit/Delete", ["Select"] + list(df["ID"].astype(str)), key="edit_sel")
             if edit_id != "Select":
@@ -413,7 +415,6 @@ if st.session_state["authenticated"]:
                         st.rerun()
                         
                     if delete_btn:
-                        # If deleted entry was Manifest, reduce from dispatch reports
                         if row_data["Task Type"] == "Manifest":
                             rep_df = st.session_state["dispatch_reports"]
                             r_date = row_data["Date"]
@@ -434,9 +435,12 @@ if st.session_state["authenticated"]:
                         st.rerun()
         else:
             st.info("No entries to edit.")
+    else:
+        st.error("🔒 Please Login using the Sidebar Admin Panel to access Edit and Delete options.")
 
-    with admin_tab3:
-        st.markdown("#### Deleted Entries (Recycle Bin)")
+with admin_tab3:
+    st.markdown("#### Deleted Entries (Recycle Bin)")
+    if st.session_state["authenticated"]:
         trash_df = st.session_state["trash"]
         if not trash_df.empty:
             st.dataframe(trash_df.drop(columns=["ID"]), use_container_width=True)
@@ -452,3 +456,5 @@ if st.session_state["authenticated"]:
                     st.rerun()
         else:
             st.info("Recycle Bin is empty.")
+    else:
+        st.error("🔒 Please Login using the Sidebar Admin Panel to view Recycle Bin.")
