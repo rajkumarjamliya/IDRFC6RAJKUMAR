@@ -173,7 +173,6 @@ with col1:
             st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
             save_data(st.session_state["data"])
             
-            # Automatically update Courier Manifest Report if Task Type is Manifest
             if task_type == "Manifest" and courier != "N/A":
                 rep_df = st.session_state["dispatch_reports"]
                 existing_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
@@ -203,11 +202,40 @@ with col2:
     df = st.session_state["data"]
     df_filtered = df[df["Date"] == selected_date_str].copy() if not df.empty else pd.DataFrame()
     
-    # ----------------- TABLE 1: PIKLIST & COURIER WISE RECORD (UPPER) -----------------
-    st.markdown("#### 📋 1. Piklist & Courier Wise Record (Kis Piklist me kitna item/box)")
+    # ----------------- TABLE 1: PIKLIST & COURIER WISE RECORD WITH HOME EDITING -----------------
+    st.markdown("#### 📋 1. Piklist & Courier Wise Record")
     if not df_filtered.empty:
-        pik_courier_df = df_filtered[["Piklist No.", "Courier", "Parcel Count", "Task Type", "Timestamp"]].copy()
-        st.dataframe(pik_courier_df, use_container_width=True)
+        pik_courier_df = df_filtered[["ID", "Piklist No.", "Courier", "Parcel Count", "Task Type", "Timestamp"]].copy()
+        st.dataframe(pik_courier_df.drop(columns=["ID"]), use_container_width=True)
+        
+        # Home Page Editing / Update Form for Quick Corrections
+        with st.form("home_edit_form"):
+            st.markdown("##### ✏️ Home Page Edit / Update Record")
+            entry_ids_list = list(df_filtered["ID"].astype(str))
+            selected_edit_id = st.selectbox(
+                "Select Record to Edit", 
+                entry_ids_list, 
+                format_func=lambda x: f"Piklist: {df_filtered[df_filtered['ID'].astype(str) == x]['Piklist No.'].values[0]} | Courier: {df_filtered[df_filtered['ID'].astype(str) == x]['Courier'].values[0]} | Count: {df_filtered[df_filtered['ID'].astype(str) == x]['Parcel Count'].values[0]}"
+            )
+            
+            row_data = df_filtered[df_filtered["ID"].astype(str) == selected_edit_id].iloc[0]
+            
+            new_pik_val = st.text_input("Update Piklist No.", value=str(row_data["Piklist No."]))
+            
+            curr_cour = row_data["Courier"] if row_data["Courier"] in st.session_state["couriers"] else "Delhivery"
+            new_cour_val = st.selectbox("Update Courier Name", st.session_state["couriers"], index=st.session_state["couriers"].index(curr_cour) if curr_cour in st.session_state["couriers"] else 0)
+            
+            new_count_val = st.number_input("Update Parcel / Box Count", min_value=1, step=1, value=int(row_data["Parcel Count"]))
+            
+            if st.form_submit_button("Update Record"):
+                main_idx = st.session_state["data"][st.session_state["data"]["ID"].astype(str) == selected_edit_id].index[0]
+                st.session_state["data"].loc[main_idx, "Piklist No."] = str(new_pik_val)
+                st.session_state["data"].loc[main_idx, "Courier"] = new_cour_val
+                st.session_state["data"].loc[main_idx, "Parcel Count"] = int(new_count_val)
+                
+                save_data(st.session_state["data"])
+                st.success("Record updated successfully!")
+                st.rerun()
     else:
         st.info("No records for this date yet.")
         
@@ -301,68 +329,84 @@ with col2:
     else:
         st.info("No work records for today.")
 
-# ----------------- ADMIN PANEL: CORRECTION, DELETE & RECYCLE BIN -----------------
+# ----------------- ADMIN PANEL: DATE-WISE EDITING, DELETE & RECYCLE BIN -----------------
 st.markdown("---")
-st.markdown("### 🔒 Admin Panel: Correction, Delete & Recycle Bin")
+st.markdown("### 🔒 Admin Panel: Date-wise Editing, Delete & Recycle Bin")
 
 if st.session_state["authenticated"]:
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["✏️ Edit / Correct Entry", "🗑️ Delete Entry", "♻️ Recycle Bin Restore"])
+    admin_tab1, admin_tab2, admin_tab3 = st.tabs(["✏️ Date-wise Edit / Correct", "🗑️ Date-wise Delete", "♻️ Recycle Bin Restore"])
     
     with admin_tab1:
-        st.markdown("##### Galat Entry ya Naam Sudharne Ke Liye:")
-        if not df.empty and not df[df["Date"] == selected_date_str].empty:
-            df_fil = df[df["Date"] == selected_date_str]
-            with st.form("admin_correction_form"):
-                entry_ids_list = list(df_fil["ID"].astype(str))
-                selected_edit_id = st.selectbox(
-                    "Select Entry to Correct", 
-                    entry_ids_list, 
-                    format_func=lambda x: f"Piklist: {df_fil[df_fil['ID'].astype(str) == x]['Piklist No.'].values[0]} | Emp: {df_fil[df_fil['ID'].astype(str) == x]['Employee Name'].values[0]} | Time: {df_fil[df_fil['ID'].astype(str) == x]['Timestamp'].values[0]}"
+        st.markdown("##### Kisi Bhi Date ka Data Select Karke Edit / Correct Karein:")
+        admin_edit_date = st.date_input("Select Date for Editing", date.today(), key="admin_edit_date_picker")
+        admin_edit_date_str = str(admin_edit_date)
+        
+        all_data = st.session_state["data"]
+        edit_filtered_df = all_data[all_data["Date"] == admin_edit_date_str] if not all_data.empty else pd.DataFrame()
+        
+        if not edit_filtered_df.empty:
+            with st.form("admin_date_edit_form"):
+                edit_id_sel = st.selectbox(
+                    "Select Entry ID to Edit", 
+                    list(edit_filtered_df["ID"].astype(str)), 
+                    key="admin_date_edit_sel", 
+                    format_func=lambda x: f"Piklist: {edit_filtered_df[edit_filtered_df['ID'].astype(str) == x]['Piklist No.'].values[0]} | Emp: {edit_filtered_df[edit_filtered_df['ID'].astype(str) == x]['Employee Name'].values[0]}"
                 )
                 
-                row_data = df_fil[df_fil["ID"].astype(str) == selected_edit_id].iloc[0]
+                r_data = edit_filtered_df[edit_filtered_df["ID"].astype(str) == edit_id_sel].iloc[0]
                 
-                new_pik_val = st.text_input("Corrected Piklist No.", value=str(row_data["Piklist No."]))
+                adm_new_pik = st.text_input("Corrected Piklist No.", value=str(r_data["Piklist No."]))
                 
-                curr_emp = row_data["Employee Name"]
+                curr_emp = r_data["Employee Name"]
                 emp_list_keys = list(st.session_state["employees"].keys())
-                new_emp_val = st.selectbox("Corrected Employee Name", emp_list_keys, index=emp_list_keys.index(curr_emp) if curr_emp in emp_list_keys else 0)
+                adm_new_emp = st.selectbox("Corrected Employee Name", emp_list_keys, index=emp_list_keys.index(curr_emp) if curr_emp in emp_list_keys else 0)
                 
-                curr_cour = row_data["Courier"] if row_data["Courier"] in st.session_state["couriers"] else "Delhivery"
-                new_cour_val = st.selectbox("Corrected Courier Name", st.session_state["couriers"], index=st.session_state["couriers"].index(curr_cour) if curr_cour in st.session_state["couriers"] else 0)
+                curr_cour = r_data["Courier"] if r_data["Courier"] in st.session_state["couriers"] else "Delhivery"
+                adm_new_cour = st.selectbox("Corrected Courier Name", st.session_state["couriers"], index=st.session_state["couriers"].index(curr_cour) if curr_cour in st.session_state["couriers"] else 0)
                 
-                new_count_val = st.number_input("Corrected Box / Parcel Count", min_value=1, step=1, value=int(row_data["Parcel Count"]))
+                adm_new_count = st.number_input("Corrected Parcel Count", min_value=1, step=1, value=int(r_data["Parcel Count"]))
                 
-                if st.form_submit_button("Update / Correct Entry"):
-                    main_idx = st.session_state["data"][st.session_state["data"]["ID"].astype(str) == selected_edit_id].index[0]
-                    st.session_state["data"].loc[main_idx, "Piklist No."] = str(new_pik_val)
-                    st.session_state["data"].loc[main_idx, "Employee Name"] = new_emp_val
-                    st.session_state["data"].loc[main_idx, "Employee ID"] = st.session_state["employees"].get(new_emp_val, "")
-                    st.session_state["data"].loc[main_idx, "Courier"] = new_cour_val
-                    st.session_state["data"].loc[main_idx, "Parcel Count"] = int(new_count_val)
+                if st.form_submit_button("Update Entry (Admin)"):
+                    m_idx = st.session_state["data"][st.session_state["data"]["ID"].astype(str) == edit_id_sel].index[0]
+                    st.session_state["data"].loc[m_idx, "Piklist No."] = str(adm_new_pik)
+                    st.session_state["data"].loc[m_idx, "Employee Name"] = adm_new_emp
+                    st.session_state["data"].loc[m_idx, "Employee ID"] = st.session_state["employees"].get(adm_new_emp, "")
+                    st.session_state["data"].loc[m_idx, "Courier"] = adm_new_cour
+                    st.session_state["data"].loc[m_idx, "Parcel Count"] = int(adm_new_count)
                     
                     save_data(st.session_state["data"])
-                    st.success("Entry corrected successfully!")
+                    st.success("Entry updated successfully by Admin!")
                     st.rerun()
         else:
-            st.info("No entries to correct for selected date.")
+            st.info(f"No entries found for date: {admin_edit_date_str}.")
 
     with admin_tab2:
-        st.markdown("##### Delete Entry (Move to Recycle Bin):")
-        if not df.empty and not df[df["Date"] == selected_date_str].empty:
-            df_fil = df[df["Date"] == selected_date_str]
-            del_id_sel = st.selectbox("Select Entry ID to Delete", ["Select"] + list(df_fil["ID"].astype(str)), key="admin_del_sel", format_func=lambda x: "Select" if x=="Select" else f"Piklist: {df_fil[df_fil['ID'].astype(str) == x]['Piklist No.'].values[0]} | Emp: {df_fil[df_fil['ID'].astype(str) == x]['Employee Name'].values[0]}")
+        st.markdown("##### Kisi Bhi Date ka Data Select Karke Delete Karein:")
+        admin_del_date = st.date_input("Select Date to Delete Entries", date.today(), key="admin_del_date_picker")
+        admin_del_date_str = str(admin_del_date)
+        
+        date_filtered_df = all_data[all_data["Date"] == admin_del_date_str] if not all_data.empty else pd.DataFrame()
+        
+        if not date_filtered_df.empty:
+            st.dataframe(date_filtered_df.drop(columns=["ID"]), use_container_width=True)
+            
+            del_id_sel = st.selectbox(
+                "Select Specific Entry ID to Delete for Selected Date", 
+                ["Select"] + list(date_filtered_df["ID"].astype(str)), 
+                key="admin_date_del_sel", 
+                format_func=lambda x: "Select" if x=="Select" else f"Piklist: {date_filtered_df[date_filtered_df['ID'].astype(str) == x]['Piklist No.'].values[0]} | Emp: {date_filtered_df[date_filtered_df['ID'].astype(str) == x]['Employee Name'].values[0]}"
+            )
+            
             if del_id_sel != "Select":
-                if st.button("Move Entry to Recycle Bin"):
-                    main_df = st.session_state["data"]
-                    row_to_trash = main_df[main_df["ID"].astype(str) == del_id_sel]
+                if st.button("Move Selected Entry to Recycle Bin"):
+                    row_to_trash = all_data[all_data["ID"].astype(str) == del_id_sel]
                     st.session_state["trash"] = pd.concat([st.session_state["trash"], row_to_trash], ignore_index=True)
-                    st.session_state["data"] = main_df[main_df["ID"].astype(str) != del_id_sel]
+                    st.session_state["data"] = all_data[all_data["ID"].astype(str) != del_id_sel]
                     save_data(st.session_state["data"])
                     st.success("Entry moved to Recycle Bin successfully!")
                     st.rerun()
         else:
-            st.info("No entries to delete for this date.")
+            st.info(f"No entries found for date: {admin_del_date_str}.")
 
     with admin_tab3:
         st.markdown("##### Recycle Bin (Restore Deleted Entries):")
@@ -381,4 +425,4 @@ if st.session_state["authenticated"]:
         else:
             st.info("Recycle Bin is empty.")
 else:
-    st.warning("⚠️ Admin Password (`122436`) dalkar sidebar se login karein taaki aap Editing, Delete aur Recycle Bin access kar sakein.")
+    st.warning("⚠️ Admin Password (`122436`) dalkar sidebar se login karein taaki aap Date-wise Editing, Delete aur Recycle Bin access kar sakein.")
