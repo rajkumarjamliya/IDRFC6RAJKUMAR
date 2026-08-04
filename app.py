@@ -6,7 +6,7 @@ import os
 # Page Config
 st.set_page_config(page_title="DELHIVERY – IDRFC6 DEWAS Portal", layout="wide")
 
-# Custom 3D & Modern Glassmorphism CSS Styling with Truck/Logistics Vibe
+# Custom 3D & Modern Glassmorphism CSS Styling
 st.markdown("""
     <style>
     .stApp {
@@ -60,34 +60,68 @@ DATA_FILE = "warehouse_entries.csv"
 REPORT_FILE = "dispatch_reports.csv"
 TRASH_FILE = "recycle_bin.csv"
 
+# Function to automatically fix missing columns in report dataframes
+def sanitize_reports_df(df):
+    expected_cols = ["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
+    if df is None or not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame(columns=expected_cols)
+    for col in expected_cols:
+        if col not in df.columns:
+            if col in ["Manifest", "Cancel", "Dispatch", "Return"]:
+                df[col] = 0
+            else:
+                df[col] = "--:--"
+    return df[expected_cols]
+
 def load_data():
-    if os.path.exists(DATA_FILE): return pd.read_csv(DATA_FILE)
+    if os.path.exists(DATA_FILE): 
+        try:
+            return pd.read_csv(DATA_FILE)
+        except:
+            pass
     return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"])
 
-def save_data(df): df.to_csv(DATA_FILE, index=False)
+def save_data(df): 
+    df.to_csv(DATA_FILE, index=False)
 
 def load_reports():
     if os.path.exists(REPORT_FILE):
-        df = pd.read_csv(REPORT_FILE)
-        expected_cols = ["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = 0 if col in ["Manifest", "Cancel", "Dispatch", "Return"] else "--:--"
-        return df
-    return pd.DataFrame(columns=["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
+        try:
+            df = pd.read_csv(REPORT_FILE)
+            return sanitize_reports_df(df)
+        except:
+            pass
+    return sanitize_reports_df(pd.DataFrame())
 
-def save_reports(df): df.to_csv(REPORT_FILE, index=False)
+def save_reports(df): 
+    df = sanitize_reports_df(df)
+    df.to_csv(REPORT_FILE, index=False)
 
 def load_trash():
-    if os.path.exists(TRASH_FILE): return pd.read_csv(TRASH_FILE)
+    if os.path.exists(TRASH_FILE): 
+        try:
+            return pd.read_csv(TRASH_FILE)
+        except:
+            pass
     return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count", "Deleted Time"])
 
-def save_trash(df): df.to_csv(TRASH_FILE, index=False)
+def save_trash(df): 
+    df.to_csv(TRASH_FILE, index=False)
 
-if "data" not in st.session_state: st.session_state["data"] = load_data()
-if "dispatch_reports" not in st.session_state: st.session_state["dispatch_reports"] = load_reports()
-if "trash_data" not in st.session_state: st.session_state["trash_data"] = load_trash()
-if "admin_logged" not in st.session_state: st.session_state["admin_logged"] = False
+# Initialize Session States with Auto Sanitation
+if "data" not in st.session_state: 
+    st.session_state["data"] = load_data()
+
+if "dispatch_reports" not in st.session_state: 
+    st.session_state["dispatch_reports"] = load_reports()
+else:
+    st.session_state["dispatch_reports"] = sanitize_reports_df(st.session_state["dispatch_reports"])
+
+if "trash_data" not in st.session_state: 
+    st.session_state["trash_data"] = load_trash()
+
+if "admin_logged" not in st.session_state: 
+    st.session_state["admin_logged"] = False
 
 couriers_list = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
 
@@ -99,10 +133,10 @@ yesterday_str = str(selected_date - timedelta(days=1))
 
 nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home Entry Portal", "📊 Analytics & Return/Dispatch Reports", "♻️ Admin & Recycle Bin"])
 
-# Admin Authentication Section in Sidebar
+# Admin Authentication Section
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Security Panel")
-ADMIN_PASSWORD = "123"  # Aap yahan apna password badal sakte hain
+ADMIN_PASSWORD = "123"
 
 if not st.session_state["admin_logged"]:
     entered_pass = st.sidebar.text_input("Enter Admin Password", type="password")
@@ -147,7 +181,7 @@ if nav_page == "🏠 Home Entry Portal":
                 auto_in_time = datetime.now().strftime("%I:%M %p")
                 
                 if task_type == "Manifest" and courier != "N/A":
-                    rep_df = st.session_state["dispatch_reports"]
+                    rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
                     ex = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
                     
                     parsed_in = datetime.strptime(auto_in_time, "%I:%M %p")
@@ -165,7 +199,9 @@ if nav_page == "🏠 Home Entry Portal":
                             "In Time": [auto_in_time], "Out Time": [auto_out_time], 
                             "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Auto Logged"]
                         })
-                        st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
+                        rep_df = pd.concat([rep_df, new_rep], ignore_index=True)
+                    
+                    st.session_state["dispatch_reports"] = sanitize_reports_df(rep_df)
                     save_reports(st.session_state["dispatch_reports"])
                 
                 new_row = pd.DataFrame({
@@ -187,25 +223,22 @@ if nav_page == "🏠 Home Entry Portal":
     with col2:
         st.markdown("<div class='card-3d'><h3>📊 Today's Live Records (" + selected_date_str + ")</h3></div>", unsafe_allow_html=True)
         df = st.session_state["data"]
-        df_f = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
+        df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
         
         if not df_f.empty:
             st.dataframe(df_f[["ID", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"]], use_container_width=True)
             
-            # Admin Delete Option for Today's Entries
             if st.session_state["admin_logged"]:
                 st.markdown("#### 🗑️ Admin Action: Delete Specific Entry")
                 del_id = st.selectbox("Select Entry ID to Delete", df_f["ID"].astype(str).tolist())
                 if st.button("Delete Selected Entry"):
                     target_row = df[df["ID"].astype(str) == del_id]
                     if not target_row.empty:
-                        # Move to trash
                         trash_row = target_row.copy()
                         trash_row["Deleted Time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         st.session_state["trash_data"] = pd.concat([st.session_state["trash_data"], trash_row], ignore_index=True)
                         save_trash(st.session_state["trash_data"])
                         
-                        # Remove from main data
                         st.session_state["data"] = df[df["ID"].astype(str) != del_id]
                         save_data(st.session_state["data"])
                         st.success("Entry deleted and moved to Recycle Bin successfully!")
@@ -216,7 +249,9 @@ if nav_page == "🏠 Home Entry Portal":
 # ================= REPORTS & ANALYTICS PAGE =================
 elif nav_page == "📊 Analytics & Return/Dispatch Reports":
     st.markdown("<div class='card-3d'><h3>🚚 Dispatch, Cancel & Return Parcel Report Hub</h3></div>", unsafe_allow_html=True)
-    rep_df = st.session_state["dispatch_reports"]
+    
+    rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
+    st.session_state["dispatch_reports"] = rep_df
     
     with st.form("auto_time_form"):
         sel_courier = st.selectbox("Select Courier", couriers_list)
@@ -224,11 +259,11 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
         
         default_in = datetime.now().strftime("%I:%M %p")
         if not curr_row.empty and pd.notna(curr_row["In Time"].values[0]) and curr_row["In Time"].values[0] != "--:--":
-            default_in = curr_row["In Time"].values[0]
+            default_in = str(curr_row["In Time"].values[0])
             
-        c_dispatch = st.number_input("Dispatch Boxes (Bheje Gaye)", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty and "Dispatch" in curr_row.columns else 0)
-        c_cancel = st.number_input("Cancel Boxes (Radd Kiye Gaye)", min_value=0, value=int(curr_row["Cancel"].values[0]) if not curr_row.empty and "Cancel" in curr_row.columns else 0)
-        c_return = st.number_input("Return Boxes (Wapas Aaye Hue)", min_value=0, value=int(curr_row["Return"].values[0]) if not curr_row.empty and "Return" in curr_row.columns else 0)
+        c_dispatch = st.number_input("Dispatch Boxes (Bheje Gaye)", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty else 0)
+        c_cancel = st.number_input("Cancel Boxes (Radd Kiye Gaye)", min_value=0, value=int(curr_row["Cancel"].values[0]) if not curr_row.empty else 0)
+        c_return = st.number_input("Return Boxes (Wapas Aaye Hue)", min_value=0, value=int(curr_row["Return"].values[0]) if not curr_row.empty else 0)
         c_remark = st.text_input("Remark / Notes", value=str(curr_row["Remark"].values[0]) if not curr_row.empty and pd.notna(curr_row["Remark"].values[0]) else "")
         
         try:
@@ -254,7 +289,9 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
                     "In Time": [default_in], "Out Time": [calc_out], 
                     "Manifest": [0], "Cancel": [c_cancel], "Dispatch": [c_dispatch], "Return": [c_return], "Remark": [c_remark]
                 })
-                st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
+                rep_df = pd.concat([rep_df, new_rep], ignore_index=True)
+            
+            st.session_state["dispatch_reports"] = sanitize_reports_df(rep_df)
             save_reports(st.session_state["dispatch_reports"])
             st.success("Report Saved Successfully!")
             st.rerun()
@@ -263,25 +300,29 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
     
     yest_pend_map = {}
     yest_rep_view = rep_df[rep_df["Date"] == yesterday_str] if not rep_df.empty else pd.DataFrame()
+    
     for c in couriers_list:
-        c_yest = yest_rep_view[yest_rep_view["Courier"] == c]
-        if not c_yest.empty:
-            man_y = int(c_yest["Manifest"].values[0])
-            can_y = int(c_yest["Cancel"].values[0])
-            dis_y = int(c_yest["Dispatch"].values[0])
-            ret_y = int(c_yest["Return"].values[0]) if "Return" in c_yest.columns else 0
-            yest_pend_map[c] = max(0, man_y - can_y - dis_y + ret_y)
+        if not yest_rep_view.empty and "Courier" in yest_rep_view.columns:
+            c_yest = yest_rep_view[yest_rep_view["Courier"] == c]
+            if not c_yest.empty:
+                man_y = int(c_yest["Manifest"].values[0]) if "Manifest" in c_yest.columns else 0
+                can_y = int(c_yest["Cancel"].values[0]) if "Cancel" in c_yest.columns else 0
+                dis_y = int(c_yest["Dispatch"].values[0]) if "Dispatch" in c_yest.columns else 0
+                ret_y = int(c_yest["Return"].values[0]) if "Return" in c_yest.columns else 0
+                yest_pend_map[c] = max(0, man_y - can_y - dis_y + ret_y)
+            else:
+                yest_pend_map[c] = 0
         else:
             yest_pend_map[c] = 0
 
     display_summary_rows = []
     for c in couriers_list:
-        c_curr = current_day_rep[current_day_rep["Courier"] == c] if not current_day_rep.empty else pd.DataFrame()
+        c_curr = current_day_rep[current_day_rep["Courier"] == c] if not current_day_rep.empty and "Courier" in current_day_rep.columns else pd.DataFrame()
         in_t = c_curr["In Time"].values[0] if not c_curr.empty and pd.notna(c_curr["In Time"].values[0]) else "--:--"
         out_t = c_curr["Out Time"].values[0] if not c_curr.empty and pd.notna(c_curr["Out Time"].values[0]) else "--:--"
-        man = int(c_curr["Manifest"].values[0]) if not c_curr.empty else 0
-        can = int(c_curr["Cancel"].values[0]) if not c_curr.empty else 0
-        dis = int(c_curr["Dispatch"].values[0]) if not c_curr.empty else 0
+        man = int(c_curr["Manifest"].values[0]) if not c_curr.empty and "Manifest" in c_curr.columns else 0
+        can = int(c_curr["Cancel"].values[0]) if not c_curr.empty and "Cancel" in c_curr.columns else 0
+        dis = int(c_curr["Dispatch"].values[0]) if not c_curr.empty and "Dispatch" in c_curr.columns else 0
         ret = int(c_curr["Return"].values[0]) if not c_curr.empty and "Return" in c_curr.columns else 0
         rem = str(c_curr["Remark"].values[0]) if not c_curr.empty and pd.notna(c_curr["Remark"].values[0]) else ""
         y_pend = yest_pend_map.get(c, 0)
@@ -306,12 +347,12 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
 
 # ================= ADMIN & RECYCLE BIN PAGE =================
 elif nav_page == "♻️ Admin & Recycle Bin":
-    st.markdown("<div class='card-3d'><h3>♻️ Admin Recycle Bin & Data Management</h3></div>", unsafe_app_html=True)
+    st.markdown("<div class='card-3d'><h3>♻️ Admin Recycle Bin & Data Management</h3></div>", unsafe_allow_html=True)
     
     if not st.session_state["admin_logged"]:
-        st.warning("🔒 Yeh section sirf Admin ke liye locked hai. Kripya sidebar mein password dalkar Admin Mode unlock karein (Default Password: `123`).")
+        st.warning("🔒 Yeh section sirf Admin ke liye locked hai. Sidebar mein password dalkar Admin Mode unlock karein (Default Password: `123`).")
     else:
-        st.success("✅ Admin Access Granted. Aap yahan deleted entries dekh sakte hain aur unhe wapas restore kar sakte hain.")
+        st.success("✅ Admin Access Granted.")
         
         trash_df = st.session_state["trash_data"]
         if not trash_df.empty:
@@ -321,11 +362,12 @@ elif nav_page == "♻️ Admin & Recycle Bin":
             col_b1, col_b2 = st.columns(2)
             with col_b1:
                 if st.button("♻️ Restore All Deleted Data"):
-                    st.session_state["data"] = pd.concat([st.session_state["data"], trash_df.drop(columns=["Deleted Time"])], ignore_index=True)
+                    restore_data = trash_df.drop(columns=["Deleted Time"]) if "Deleted Time" in trash_df.columns else trash_df
+                    st.session_state["data"] = pd.concat([st.session_state["data"], restore_data], ignore_index=True)
                     save_data(st.session_state["data"])
                     st.session_state["trash_data"] = pd.DataFrame(columns=trash_df.columns)
                     save_trash(st.session_state["trash_data"])
-                    st.success("Saari entries successfully restore ho gayi hain!")
+                    st.success("Saari entries restore ho gayi hain!")
                     st.rerun()
             with col_b2:
                 if st.button("🔥 Empty Recycle Bin Permanently"):
@@ -334,4 +376,4 @@ elif nav_page == "♻️ Admin & Recycle Bin":
                     st.warning("Recycle bin khali kar di gayi hai!")
                     st.rerun()
         else:
-            st.info("♻️ Recycle Bin bilkul khali hai. Koi bhi deleted entry nahi hai.")
+            st.info("♻️ Recycle Bin khali hai.")
