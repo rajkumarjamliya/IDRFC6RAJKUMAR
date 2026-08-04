@@ -47,8 +47,10 @@ DATA_FILE = "warehouse_entries.csv"
 REPORT_FILE = "dispatch_reports.csv"
 TRASH_FILE = "recycle_bin.csv"
 EMPLOYEE_FILE = "employees_list.csv"
+COURIER_FILE = "couriers_list.csv"
+CONFIG_FILE = "admin_config.csv"
 
-# Updated Employee List with your exact provided names and IDs
+# Default Employee List
 default_employees = {
     "AJAY PATEL": "W222449",
     "PANKAJ PATEL": "W224500",
@@ -72,6 +74,8 @@ default_employees = {
     "KAVITA": "W231689"
 }
 
+default_couriers = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
+
 def load_employees():
     if os.path.exists(EMPLOYEE_FILE):
         try:
@@ -84,6 +88,32 @@ def load_employees():
 def save_employees(emp_dict):
     df = pd.DataFrame(list(emp_dict.items()), columns=["Name", "Emp ID"])
     df.to_csv(EMPLOYEE_FILE, index=False)
+
+def load_couriers():
+    if os.path.exists(COURIER_FILE):
+        try:
+            df = pd.read_csv(COURIER_FILE)
+            return df["Courier"].tolist()
+        except:
+            pass
+    return default_couriers
+
+def save_couriers(courier_list):
+    df = pd.DataFrame({"Courier": courier_list})
+    df.to_csv(COURIER_FILE, index=False)
+
+def load_admin_password():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            df = pd.read_csv(CONFIG_FILE)
+            return str(df["Password"].values[0])
+        except:
+            pass
+    return "123"
+
+def save_admin_password(new_pass):
+    df = pd.DataFrame({"Password": [new_pass]})
+    df.to_csv(CONFIG_FILE, index=False)
 
 def sanitize_reports_df(df):
     expected_cols = ["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
@@ -128,8 +158,10 @@ else: st.session_state["dispatch_reports"] = sanitize_reports_df(st.session_stat
 if "trash_data" not in st.session_state: st.session_state["trash_data"] = load_trash()
 if "admin_logged" not in st.session_state: st.session_state["admin_logged"] = False
 if "employees" not in st.session_state: st.session_state["employees"] = load_employees()
+if "couriers" not in st.session_state: st.session_state["couriers"] = load_couriers()
+if "admin_password" not in st.session_state: st.session_state["admin_password"] = load_admin_password()
 
-couriers_list = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
+couriers_list = st.session_state["couriers"]
 
 # Sidebar Controls
 st.sidebar.markdown("### ⚙️ Control Center")
@@ -137,16 +169,16 @@ selected_date = st.sidebar.date_input("Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Piklist & Entry Portal", "📊 Courier-wise Total & Pending Report", "👥 Employee Management", "♻️ Admin & Recycle Bin"])
+nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Piklist & Entry Portal", "📊 Courier-wise Total & Pending Report", "👥 Employee & Courier Management", "♻️ Admin & Recycle Bin"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Security Panel")
-ADMIN_PASSWORD = "123"
+st.sidebar.info("💡 Default Password: **123**")
 
 if not st.session_state["admin_logged"]:
     entered_pass = st.sidebar.text_input("Enter Admin Password", type="password")
     if st.sidebar.button("Unlock Admin Mode"):
-        if entered_pass == ADMIN_PASSWORD:
+        if entered_pass == st.session_state["admin_password"]:
             st.session_state["admin_logged"] = True
             st.sidebar.success("Admin Unlocked!")
             st.rerun()
@@ -167,7 +199,6 @@ if nav_page == "🏠 Piklist & Entry Portal":
     with col1:
         piklist_no = st.text_input("Piklist No.")
         
-        # Employee Dropdown & Automatic ID Display
         emp_list = list(st.session_state["employees"].keys())
         selected_emp = st.selectbox("Select Employee Name", emp_list)
         auto_emp_id = st.session_state["employees"].get(selected_emp, "N/A")
@@ -358,38 +389,101 @@ elif nav_page == "📊 Courier-wise Total & Pending Report":
     st.markdown("#### 📋 Complete Courier-wise Final Status Summary")
     st.dataframe(pd.DataFrame(display_summary_rows), use_container_width=True)
 
-# ================= 3. EMPLOYEE MANAGEMENT =================
-elif nav_page == "👥 Employee Management":
-    st.markdown("<div class='card-3d'><h3>👥 Employee Management (Add / View Employees)</h3></div>", unsafe_allow_html=True)
+# ================= 3. EMPLOYEE & COURIER MANAGEMENT =================
+elif nav_page == "👥 Employee & Courier Management":
+    st.markdown("<div class='card-3d'><h3>👥 Employee & Courier Management (Add / Delete)</h3></div>", unsafe_allow_html=True)
     
     col_e1, col_e2 = st.columns(2, gap="large")
+    
     with col_e1:
-        st.markdown("#### Add New Employee")
-        new_emp_name = st.text_input("Employee Full Name")
-        new_emp_id = st.text_input("Assign Employee ID (e.g., W231700)")
+        st.markdown("#### 👤 Employee Management")
         
-        if st.button("➕ Add Employee"):
-            if new_emp_name and new_emp_id:
-                st.session_state["employees"][new_emp_name] = new_emp_id
-                save_employees(st.session_state["employees"])
-                st.success(f"Employee {new_emp_name} added successfully!")
-                st.rerun()
-            else:
-                st.warning("Please fill both Name and Employee ID.")
-                
-    with col_e2:
+        # Add Employee
+        with st.form("add_emp_form"):
+            st.markdown("**Add New Employee**")
+            new_emp_name = st.text_input("Employee Full Name")
+            new_emp_id = st.text_input("Assign Employee ID (e.g., W231700)")
+            if st.form_submit_button("➕ Add Employee"):
+                if new_emp_name and new_emp_id:
+                    st.session_state["employees"][new_emp_name] = new_emp_id
+                    save_employees(st.session_state["employees"])
+                    st.success(f"Employee {new_emp_name} added successfully!")
+                    st.rerun()
+                else:
+                    st.warning("Please fill both Name and Employee ID.")
+
+        # Delete Employee
+        with st.form("del_emp_form"):
+            st.markdown("**Remove Existing Employee**")
+            del_emp_name = st.selectbox("Select Employee to Remove", list(st.session_state["employees"].keys()))
+            if st.form_submit_button("🗑️ Delete Selected Employee"):
+                if del_emp_name in st.session_state["employees"]:
+                    del st.session_state["employees"][del_emp_name]
+                    save_employees(st.session_state["employees"])
+                    st.success(f"Employee {del_emp_name} removed successfully!")
+                    st.rerun()
+
         st.markdown("#### Current Employee List")
         emp_df = pd.DataFrame(list(st.session_state["employees"].items()), columns=["Employee Name", "Employee ID"])
         st.dataframe(emp_df, use_container_width=True)
 
+    with col_e2:
+        st.markdown("#### 🚚 Courier Management")
+        
+        # Add Courier
+        with st.form("add_cour_form"):
+            st.markdown("**Add New Courier Company**")
+            new_cour_name = st.text_input("Courier Company Name")
+            if st.form_submit_button("➕ Add Courier"):
+                if new_cour_name and new_cour_name not in st.session_state["couriers"]:
+                    st.session_state["couriers"].append(new_cour_name)
+                    save_couriers(st.session_state["couriers"])
+                    st.success(f"Courier {new_cour_name} added successfully!")
+                    st.rerun()
+                else:
+                    st.warning("Please enter a valid or unique Courier name.")
+
+        # Delete Courier
+        with st.form("del_cour_form"):
+            st.markdown("**Remove Existing Courier Company**")
+            del_cour_name = st.selectbox("Select Courier to Remove", st.session_state["couriers"])
+            if st.form_submit_button("🗑️ Delete Selected Courier"):
+                if len(st.session_state["couriers"]) > 1:
+                    st.session_state["couriers"].remove(del_cour_name)
+                    save_couriers(st.session_state["couriers"])
+                    st.success(f"Courier {del_cour_name} removed successfully!")
+                    st.rerun()
+                else:
+                    st.warning("At least one courier must remain.")
+
+        st.markdown("#### Current Courier List")
+        cour_df = pd.DataFrame({"Courier Company": st.session_state["couriers"]})
+        st.dataframe(cour_df, use_container_width=True)
+
 # ================= 4. ADMIN & RECYCLE BIN =================
 elif nav_page == "♻️ Admin & Recycle Bin":
-    st.markdown("<div class='card-3d'><h3>♻️ Admin Recycle Bin</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card-3d'><h3>♻️ Admin Panel & Recycle Bin</h3></div>", unsafe_allow_html=True)
     
     if not st.session_state["admin_logged"]:
-        st.warning("🔒 Sidebar mein password (123) dalkar Admin Mode unlock karein.")
+        st.warning("🔒 Sidebar mein password dalkar Admin Mode unlock karein (Default Password: `123`).")
     else:
         st.success("✅ Admin Access Granted.")
+        
+        # Password Change Section
+        st.markdown("#### 🔑 Change Admin Password")
+        with st.form("change_pass_form"):
+            new_admin_pass = st.text_input("Enter New Admin Password", type="password")
+            confirm_admin_pass = st.text_input("Confirm New Admin Password", type="password")
+            if st.form_submit_button("Update Password"):
+                if new_admin_pass and new_admin_pass == confirm_admin_pass:
+                    st.session_state["admin_password"] = new_admin_pass
+                    save_admin_password(new_admin_pass)
+                    st.success("Admin password updated successfully! Please use your new password next time.")
+                else:
+                    st.error("Passwords do not match or field is empty.")
+
+        st.markdown("---")
+        st.markdown("#### ♻️ Recycle Bin Data")
         trash_df = st.session_state["trash_data"]
         if not trash_df.empty:
             st.dataframe(trash_df, use_container_width=True)
