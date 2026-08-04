@@ -131,7 +131,7 @@ def load_data():
     if os.path.exists(DATA_FILE): 
         try: return pd.read_csv(DATA_FILE)
         except: pass
-    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time"])
+    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time"])
 
 def save_data(df): df.to_csv(DATA_FILE, index=False)
 
@@ -147,7 +147,7 @@ def load_trash():
     if os.path.exists(TRASH_FILE): 
         try: return pd.read_csv(TRASH_FILE)
         except: pass
-    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time", "Deleted Time"])
+    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Deleted Time"])
 
 def save_trash(df): df.to_csv(TRASH_FILE, index=False)
 
@@ -191,7 +191,7 @@ else:
 
 # ================= 1. HOME ENTRY PORTAL =================
 if nav_page == "🏠 Piklist & Entry Portal":
-    st.markdown("<div class='card-3d'><h3>📝 Piklist-wise Courier & Box Entry Portal (Live Current Time)</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card-3d'><h3>📝 Piklist-wise Courier & Box Entry Portal (Live Current Time Status)</h3></div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([1, 1.4], gap="large")
     
@@ -213,16 +213,13 @@ if nav_page == "🏠 Piklist & Entry Portal":
             parcel_count = st.number_input("Box / Parcel Count", min_value=1, value=1)
 
         live_preview_time = datetime.now().strftime("%I:%M:%S %p")
-        st.info(f"🕒 Current Live Time (Jis time entry submit hogi): **{live_preview_time}**")
+        st.info(f"🕒 Current Live Time (Jis time status update hoga): **{live_preview_time}**")
 
         if st.button("💾 Submit Piklist Entry", use_container_width=True):
             if piklist_no and selected_emp:
-                # Employee ke liye exact current time record hoga
                 auto_in_time = datetime.now().strftime("%I:%M:%S %p")
-                parsed_in = datetime.strptime(auto_in_time, "%I:%M:%S %p")
-                auto_out_time = (parsed_in + timedelta(minutes=5)).strftime("%I:%M:%S %p")
                 
-                # Agar Task Type Manifest hai toh courier report mein bhi entry append hogi
+                # Agar task Manifest hai, toh courier report mein boxes add ho jayenge
                 if task_type == "Manifest" and courier != "N/A":
                     rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
                     ex = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
@@ -233,7 +230,7 @@ if nav_page == "🏠 Piklist & Entry Portal":
                     else:
                         new_rep = pd.DataFrame({
                             "Date": [selected_date_str], "Courier": [courier], 
-                            "In Time": ["--:--"], "Out Time": ["--:--"], 
+                            "In Time": ["10:00 AM"], "Out Time": ["07:00 PM"], 
                             "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Auto Logged"]
                         })
                         rep_df = pd.concat([rep_df, new_rep], ignore_index=True)
@@ -251,29 +248,29 @@ if nav_page == "🏠 Piklist & Entry Portal":
                     "Task Type": [task_type],
                     "Courier": [courier],
                     "Parcel Count": [int(parcel_count)],
-                    "In Time": [auto_in_time],
-                    "Out Time": [auto_out_time]
+                    "In Time": [auto_in_time]
                 })
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
                 save_data(st.session_state["data"])
 
-                st.success(f"Entry Saved Successfully!\n\n👤 Employee: **{selected_emp}**\n🕒 In-Time: **{auto_in_time}** | Out-Time: **{auto_out_time}**")
+                st.success(f"Entry Saved Successfully!\n\n👤 Employee: **{selected_emp}** | 📋 Piklist: **{piklist_no}**\n🕒 Working In-Time: **{auto_in_time}**")
                 st.rerun()
 
     with col2:
-        st.markdown(f"<h3>📦 Piklist & Employee Time Records ({selected_date_str})</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3>📦 Employee Live Status & Piklist Records ({selected_date_str})</h3>", unsafe_allow_html=True)
         df = st.session_state["data"]
         df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
         
         if not df_f.empty:
             if "In Time" not in df_f.columns: df_f["In Time"] = "--:--"
-            if "Out Time" not in df_f.columns: df_f["Out Time"] = "--:--"
             
-            st.dataframe(df_f[["ID", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time"]], use_container_width=True)
+            # Clean table showing only Piklist No, Employee Name, ID Code, Task Type, Courier, Parcel Count, and Time (No Database ID shown)
+            display_cols = ["Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time"]
+            st.dataframe(df_f[display_cols], use_container_width=True)
             
             if st.session_state["admin_logged"]:
                 st.markdown("#### 🗑️ Delete Specific Piklist Entry")
-                del_id = st.selectbox("Select Entry ID", df_f["ID"].astype(str).tolist())
+                del_id = st.selectbox("Select Entry ID to Delete", df_f["ID"].astype(str).tolist())
                 if st.button("Delete Entry"):
                     target_row = df[df["ID"].astype(str) == del_id]
                     if not target_row.empty:
@@ -301,7 +298,6 @@ elif nav_page == "📊 Courier-wise Total & Pending Report":
         sel_courier = st.selectbox("Select Courier Company", couriers_list)
         curr_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == sel_courier)]
         
-        # Courier report ke liye custom timing fields
         default_in = "10:00 AM"
         if not curr_row.empty and pd.notna(curr_row["In Time"].values[0]) and curr_row["In Time"].values[0] != "--:--":
             default_in = str(curr_row["In Time"].values[0])
@@ -312,9 +308,9 @@ elif nav_page == "📊 Courier-wise Total & Pending Report":
             
         col_t1, col_t2 = st.columns(2)
         with col_t1:
-            c_in_time = st.text_input("Courier In Time (Dispute / Report)", value=default_in)
+            c_in_time = st.text_input("Courier Dispute In Time", value=default_in)
         with col_t2:
-            c_out_time = st.text_input("Courier Out Time (Dispute / Report)", value=default_out)
+            c_out_time = st.text_input("Courier Dispute Out Time", value=default_out)
             
         c_manifest = st.number_input("Manifest Boxes (Aaye Hue)", min_value=0, value=int(curr_row["Manifest"].values[0]) if not curr_row.empty else 0)
         c_dispatch = st.number_input("Dispatch Boxes (Bheje Gaye)", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty else 0)
