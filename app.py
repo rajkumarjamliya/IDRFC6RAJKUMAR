@@ -48,15 +48,28 @@ REPORT_FILE = "dispatch_reports.csv"
 TRASH_FILE = "recycle_bin.csv"
 EMPLOYEE_FILE = "employees_list.csv"
 
-# Default Employees with IDs
+# Updated Employee List with your exact provided names and IDs
 default_employees = {
-    "Rajkumar Jamliya": "DLV-DEW-001",
-    "Rahul Verma": "DLV-DEW-002",
-    "Amit Chouhan": "DLV-DEW-003",
-    "Sunil Rathore": "DLV-DEW-004",
-    "Vijay Sharma": "DLV-DEW-005",
-    "Deepak Patel": "DLV-DEW-006",
-    "Govind Solanki": "DLV-DEW-007"
+    "AJAY PATEL": "W222449",
+    "PANKAJ PATEL": "W224500",
+    "KAMLESH MANDOI": "W225396",
+    "ABHISHEK PATEL": "W225403",
+    "SHRI RAM": "W225410",
+    "KUNAL PATIL": "W225413",
+    "RAJSARGARA": "W225415",
+    "ANISH PATEL": "226351",
+    "ANKIT MANDLOI": "W226654",
+    "SANDEEP PATEL": "W228473",
+    "ABHISHEK PATEL (2)": "230777",
+    "RAJKUMAR JAMLIYA": "W224483",
+    "CHANDAN": "W228474",
+    "SHAILESH TIWARI": "SSN079654",
+    "SUJATA KUSHWAHA": "W231056",
+    "SANDHYA KARANJA": "W231195",
+    "HARSHITA SOLANKI": "W231196",
+    "BHAVNA MALVIYA": "W231057",
+    "REKHA": "W231152",
+    "KAVITA": "W231689"
 }
 
 def load_employees():
@@ -171,7 +184,6 @@ if nav_page == "🏠 Piklist & Entry Portal":
 
         if st.button("💾 Submit Piklist Entry (Auto Time)", use_container_width=True):
             if piklist_no and selected_emp:
-                # Automatic Time Generation for Employee Entry
                 auto_in_time = datetime.now().strftime("%I:%M %p")
                 parsed_in = datetime.strptime(auto_in_time, "%I:%M %p")
                 auto_out_time = (parsed_in + timedelta(minutes=5)).strftime("%I:%M %p")
@@ -222,7 +234,6 @@ if nav_page == "🏠 Piklist & Entry Portal":
         df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
         
         if not df_f.empty:
-            # Ensure In Time and Out Time columns exist in older data frames safely
             if "In Time" not in df_f.columns: df_f["In Time"] = "--:--"
             if "Out Time" not in df_f.columns: df_f["Out Time"] = "--:--"
             
@@ -355,7 +366,7 @@ elif nav_page == "👥 Employee Management":
     with col_e1:
         st.markdown("#### Add New Employee")
         new_emp_name = st.text_input("Employee Full Name")
-        new_emp_id = st.text_input("Assign Employee ID (e.g., DLV-DEW-008)")
+        new_emp_id = st.text_input("Assign Employee ID (e.g., W231700)")
         
         if st.button("➕ Add Employee"):
             if new_emp_name and new_emp_id:
