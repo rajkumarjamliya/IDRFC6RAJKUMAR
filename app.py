@@ -41,7 +41,7 @@ st.markdown("""
 st.markdown("""
     <div class="main-header">
         <h1>📦 DELHIVERY – IDRFC6 DEWAS Tracker</h1>
-        <p>Station: IDRFC6 DEWAS &nbsp;|&nbsp; Managed by: RAJKUMAR &nbsp;|&nbsp; Auto Time & 3D Dashboard</p>
+        <p>Station: IDRFC6 DEWAS &nbsp;|&nbsp; Managed by: RAJKUMAR &nbsp;|&nbsp; Auto Time & Return Boxes Enabled</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -56,7 +56,8 @@ def save_data(df): df.to_csv(DATA_FILE, index=False)
 
 def load_reports():
     if os.path.exists(REPORT_FILE): return pd.read_csv(REPORT_FILE)
-    return pd.DataFrame(columns=["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Remark"])
+    # Added 'Return' column to tracking reports
+    return pd.DataFrame(columns=["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
 
 def save_reports(df): df.to_csv(REPORT_FILE, index=False)
 
@@ -68,8 +69,9 @@ couriers_list = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedar
 st.sidebar.markdown("### ⚙️ Control Center")
 selected_date = st.sidebar.date_input("Working Date", date.today())
 selected_date_str = str(selected_date)
+yesterday_str = str(selected_date - timedelta(days=1))
 
-nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home Entry Portal", "📊 Analytics & Automatic Time Reports"])
+nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home Entry Portal", "📊 Analytics & Return/Dispatch Reports"])
 
 if nav_page == "🏠 Home Entry Portal":
     col1, col2 = st.columns([1, 1.3])
@@ -106,7 +108,7 @@ if nav_page == "🏠 Home Entry Portal":
                         new_rep = pd.DataFrame({
                             "Date": [selected_date_str], "Courier": [courier], 
                             "In Time": [auto_in_time], "Out Time": [auto_out_time], 
-                            "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Remark": ["Auto System Logged"]
+                            "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Auto System Logged"]
                         })
                         st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
                     save_reports(st.session_state["dispatch_reports"])
@@ -114,8 +116,8 @@ if nav_page == "🏠 Home Entry Portal":
                 st.success(f"Entry Saved Successfully!\n\n🕒 In-Time: **{auto_in_time}**")
                 st.rerun()
 
-elif nav_page == "📊 Analytics & Automatic Time Reports":
-    st.markdown("<div class='card-3d'><h3>🚚 Automatic Time In/Out Report (+5 Mins)</h3></div>", unsafe_allow_html=True)
+elif nav_page == "📊 Analytics & Return/Dispatch Reports":
+    st.markdown("<div class='card-3d'><h3>🚚 Dispatch, Cancel & Return Parcel Report</h3></div>", unsafe_allow_html=True)
     rep_df = st.session_state["dispatch_reports"]
     
     with st.form("auto_time_form"):
@@ -126,8 +128,10 @@ elif nav_page == "📊 Analytics & Automatic Time Reports":
         if not curr_row.empty and pd.notna(curr_row["In Time"].values[0]) and curr_row["In Time"].values[0] != "--:--":
             default_in = curr_row["In Time"].values[0]
             
-        c_dispatch = st.number_input("Enter Dispatch Boxes", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty else 0)
-        c_cancel = st.number_input("Enter Cancel Boxes", min_value=0, value=int(curr_row["Cancel"].values[0]) if not curr_row.empty else 0)
+        c_dispatch = st.number_input("Dispatch Boxes (Bheje Gaye)", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty and "Dispatch" in curr_row.columns else 0)
+        c_cancel = st.number_input("Cancel Boxes (Radd Kiye Gaye)", min_value=0, value=int(curr_row["Cancel"].values[0]) if not curr_row.empty and "Cancel" in curr_row.columns else 0)
+        c_return = st.number_input("Return Boxes (Kitne Box Wapas Aaye)", min_value=0, value=int(curr_row["Return"].values[0]) if not curr_row.empty and "Return" in curr_row.columns else 0)
+        c_remark = st.text_input("Remark", value=str(curr_row["Remark"].values[0]) if not curr_row.empty and pd.notna(curr_row["Remark"].values[0]) else "")
         
         try:
             p_in = datetime.strptime(default_in.strip(), "%I:%M %p")
@@ -137,22 +141,70 @@ elif nav_page == "📊 Analytics & Automatic Time Reports":
             
         st.info(f"⚡ System Auto Time -> In-Time: **{default_in}** | Out-Time (In + 5 Mins): **{calc_out}**")
 
-        if st.form_submit_button("Confirm & Save Dispatch"):
+        if st.form_submit_button("Confirm & Save Report"):
             if not curr_row.empty:
                 idx = curr_row.index[0]
                 rep_df.loc[idx, "In Time"] = default_in
                 rep_df.loc[idx, "Out Time"] = calc_out
                 rep_df.loc[idx, "Dispatch"] = c_dispatch
                 rep_df.loc[idx, "Cancel"] = c_cancel
+                rep_df.loc[idx, "Return"] = c_return
+                rep_df.loc[idx, "Remark"] = c_remark
             else:
                 new_rep = pd.DataFrame({
                     "Date": [selected_date_str], "Courier": [sel_courier], 
                     "In Time": [default_in], "Out Time": [calc_out], 
-                    "Manifest": [0], "Cancel": [c_cancel], "Dispatch": [c_dispatch], "Remark": ["Auto Timing"]
+                    "Manifest": [0], "Cancel": [c_cancel], "Dispatch": [c_dispatch], "Return": [c_return], "Remark": [c_remark]
                 })
                 st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
             save_reports(st.session_state["dispatch_reports"])
-            st.success("Dispatch & Timing Saved Successfully!")
+            st.success("Dispatch, Cancel & Return Report Saved Successfully!")
             st.rerun()
 
-    st.dataframe(st.session_state["dispatch_reports"], use_container_width=True)
+    # Calculate Summary with Returns Included
+    current_day_rep = rep_df[rep_df["Date"] == selected_date_str] if not rep_df.empty else pd.DataFrame()
+    
+    # Yesterday pending map
+    yest_pend_map = {}
+    yest_rep_view = rep_df[rep_df["Date"] == yesterday_str] if not rep_df.empty else pd.DataFrame()
+    for c in couriers_list:
+        c_yest = yest_rep_view[yest_rep_view["Courier"] == c]
+        if not c_yest.empty:
+            man_y = int(c_yest["Manifest"].values[0])
+            can_y = int(c_yest["Cancel"].values[0])
+            dis_y = int(c_yest["Dispatch"].values[0])
+            ret_y = int(c_yest["Return"].values[0]) if "Return" in c_yest.columns else 0
+            yest_pend_map[c] = max(0, man_y - can_y - dis_y + ret_y)
+        else:
+            yest_pend_map[c] = 0
+
+    display_summary_rows = []
+    for c in couriers_list:
+        c_curr = current_day_rep[current_day_rep["Courier"] == c] if not current_day_rep.empty else pd.DataFrame()
+        in_t = c_curr["In Time"].values[0] if not c_curr.empty and pd.notna(c_curr["In Time"].values[0]) else "--:--"
+        out_t = c_curr["Out Time"].values[0] if not c_curr.empty and pd.notna(c_curr["Out Time"].values[0]) else "--:--"
+        man = int(c_curr["Manifest"].values[0]) if not c_curr.empty else 0
+        can = int(c_curr["Cancel"].values[0]) if not c_curr.empty else 0
+        dis = int(c_curr["Dispatch"].values[0]) if not c_curr.empty else 0
+        ret = int(c_curr["Return"].values[0]) if not c_curr.empty and "Return" in c_curr.columns else 0
+        rem = str(c_curr["Remark"].values[0]) if not c_curr.empty and pd.notna(c_curr["Remark"].values[0]) else ""
+        y_pend = yest_pend_map.get(c, 0)
+        
+        # Formula including Returns
+        final_pend = max(0, (man + y_pend) - can - dis + ret)
+        
+        display_summary_rows.append({
+            "Courier": c,
+            "Yesterday Pending": y_pend,
+            "In Time": in_t,
+            "Out Time": out_t,
+            "Manifest": man,
+            "Cancel": can,
+            "Dispatch": dis,
+            "Return": ret,
+            "Pending": final_pend,
+            "Remark": rem
+        })
+        
+    st.markdown("#### 📋 Final Courier Status & Return Summary Table")
+    st.dataframe(pd.DataFrame(display_summary_rows), use_container_width=True)
