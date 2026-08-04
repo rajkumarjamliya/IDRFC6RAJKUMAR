@@ -39,13 +39,38 @@ st.markdown("""
 st.markdown("""
     <div class="main-header">
         <h1>🚛 DELHIVERY – IDRFC6 DEWAS WAREHOUSE HUB 📦</h1>
-        <p>⚡ Advanced Piklist & Courier-wise Logistics Management System &nbsp;|&nbsp; Managed by: RAJKUMAR</p>
+        <p>⚡ Advanced Piklist & Courier Logistics Management System &nbsp;|&nbsp; Managed by: RAJKUMAR</p>
     </div>
 """, unsafe_allow_html=True)
 
 DATA_FILE = "warehouse_entries.csv"
 REPORT_FILE = "dispatch_reports.csv"
 TRASH_FILE = "recycle_bin.csv"
+EMPLOYEE_FILE = "employees_list.csv"
+
+# Default Employees with IDs
+default_employees = {
+    "Rajkumar Jamliya": "DLV-DEW-001",
+    "Rahul Verma": "DLV-DEW-002",
+    "Amit Chouhan": "DLV-DEW-003",
+    "Sunil Rathore": "DLV-DEW-004",
+    "Vijay Sharma": "DLV-DEW-005",
+    "Deepak Patel": "DLV-DEW-006",
+    "Govind Solanki": "DLV-DEW-007"
+}
+
+def load_employees():
+    if os.path.exists(EMPLOYEE_FILE):
+        try:
+            df = pd.read_csv(EMPLOYEE_FILE)
+            return dict(zip(df["Name"], df["Emp ID"]))
+        except:
+            pass
+    return default_employees
+
+def save_employees(emp_dict):
+    df = pd.DataFrame(list(emp_dict.items()), columns=["Name", "Emp ID"])
+    df.to_csv(EMPLOYEE_FILE, index=False)
 
 def sanitize_reports_df(df):
     expected_cols = ["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
@@ -63,7 +88,7 @@ def load_data():
     if os.path.exists(DATA_FILE): 
         try: return pd.read_csv(DATA_FILE)
         except: pass
-    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"])
+    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time"])
 
 def save_data(df): df.to_csv(DATA_FILE, index=False)
 
@@ -79,7 +104,7 @@ def load_trash():
     if os.path.exists(TRASH_FILE): 
         try: return pd.read_csv(TRASH_FILE)
         except: pass
-    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count", "Deleted Time"])
+    return pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time", "Deleted Time"])
 
 def save_trash(df): df.to_csv(TRASH_FILE, index=False)
 
@@ -89,6 +114,7 @@ if "dispatch_reports" not in st.session_state: st.session_state["dispatch_report
 else: st.session_state["dispatch_reports"] = sanitize_reports_df(st.session_state["dispatch_reports"])
 if "trash_data" not in st.session_state: st.session_state["trash_data"] = load_trash()
 if "admin_logged" not in st.session_state: st.session_state["admin_logged"] = False
+if "employees" not in st.session_state: st.session_state["employees"] = load_employees()
 
 couriers_list = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
 
@@ -98,7 +124,7 @@ selected_date = st.sidebar.date_input("Working Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Piklist & Entry Portal", "📊 Courier-wise Total & Pending Report", "♻️ Admin & Recycle Bin"])
+nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Piklist & Entry Portal", "📊 Courier-wise Total & Pending Report", "👥 Employee Management", "♻️ Admin & Recycle Bin"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Security Panel")
@@ -121,13 +147,20 @@ else:
 
 # ================= 1. HOME ENTRY PORTAL =================
 if nav_page == "🏠 Piklist & Entry Portal":
-    st.markdown("<div class='card-3d'><h3>📝 Piklist-wise Courier & Box Entry Portal</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card-3d'><h3>📝 Piklist-wise Courier & Box Entry Portal (Auto-Time Tracking)</h3></div>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([1, 1.4], gap="large")
     
     with col1:
         piklist_no = st.text_input("Piklist No.")
-        emp_name = st.text_input("Employee Name")
+        
+        # Employee Dropdown & Automatic ID Display
+        emp_list = list(st.session_state["employees"].keys())
+        selected_emp = st.selectbox("Select Employee Name", emp_list)
+        auto_emp_id = st.session_state["employees"].get(selected_emp, "N/A")
+        
+        st.markdown(f"🆔 **Automatic Employee ID:** `{auto_emp_id}`")
+        
         task_type = st.selectbox("Task Type", ["Manifest", "Picking", "Packing", "Scanning"])
         
         courier = "N/A"
@@ -136,16 +169,16 @@ if nav_page == "🏠 Piklist & Entry Portal":
             courier = st.selectbox("Courier Company", couriers_list)
             parcel_count = st.number_input("Box / Parcel Count", min_value=1, value=1)
 
-        if st.button("💾 Submit Piklist Entry", use_container_width=True):
-            if piklist_no and emp_name:
+        if st.button("💾 Submit Piklist Entry (Auto Time)", use_container_width=True):
+            if piklist_no and selected_emp:
+                # Automatic Time Generation for Employee Entry
                 auto_in_time = datetime.now().strftime("%I:%M %p")
+                parsed_in = datetime.strptime(auto_in_time, "%I:%M %p")
+                auto_out_time = (parsed_in + timedelta(minutes=5)).strftime("%I:%M %p")
                 
                 if task_type == "Manifest" and courier != "N/A":
                     rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
                     ex = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
-                    
-                    parsed_in = datetime.strptime(auto_in_time, "%I:%M %p")
-                    auto_out_time = (parsed_in + timedelta(minutes=5)).strftime("%I:%M %p")
 
                     if not ex.empty:
                         idx = ex.index[0]
@@ -169,24 +202,31 @@ if nav_page == "🏠 Piklist & Entry Portal":
                     "Date": [selected_date_str],
                     "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
                     "Piklist No.": [str(piklist_no)],
-                    "Employee Name": [emp_name],
+                    "Employee Name": [selected_emp],
+                    "Emp ID": [auto_emp_id],
                     "Task Type": [task_type],
                     "Courier": [courier],
-                    "Parcel Count": [int(parcel_count)]
+                    "Parcel Count": [int(parcel_count)],
+                    "In Time": [auto_in_time],
+                    "Out Time": [auto_out_time]
                 })
                 st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
                 save_data(st.session_state["data"])
 
-                st.success(f"Piklist Saved Successfully!\n\n🕒 In-Time: **{auto_in_time}**")
+                st.success(f"Entry Saved Successfully!\n\n👤 Employee: **{selected_emp}**\n🕒 In-Time: **{auto_in_time}** | Out-Time: **{auto_out_time}**")
                 st.rerun()
 
     with col2:
-        st.markdown(f"<h3>📦 Piklist & Courier Records ({selected_date_str})</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3>📦 Piklist & Employee Time Records ({selected_date_str})</h3>", unsafe_allow_html=True)
         df = st.session_state["data"]
         df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
         
         if not df_f.empty:
-            st.dataframe(df_f[["ID", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"]], use_container_width=True)
+            # Ensure In Time and Out Time columns exist in older data frames safely
+            if "In Time" not in df_f.columns: df_f["In Time"] = "--:--"
+            if "Out Time" not in df_f.columns: df_f["Out Time"] = "--:--"
+            
+            st.dataframe(df_f[["ID", "Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "In Time", "Out Time"]], use_container_width=True)
             
             if st.session_state["admin_logged"]:
                 st.markdown("#### 🗑️ Delete Specific Piklist Entry")
@@ -307,7 +347,31 @@ elif nav_page == "📊 Courier-wise Total & Pending Report":
     st.markdown("#### 📋 Complete Courier-wise Final Status Summary")
     st.dataframe(pd.DataFrame(display_summary_rows), use_container_width=True)
 
-# ================= 3. ADMIN & RECYCLE BIN =================
+# ================= 3. EMPLOYEE MANAGEMENT =================
+elif nav_page == "👥 Employee Management":
+    st.markdown("<div class='card-3d'><h3>👥 Employee Management (Add / View Employees)</h3></div>", unsafe_allow_html=True)
+    
+    col_e1, col_e2 = st.columns(2, gap="large")
+    with col_e1:
+        st.markdown("#### Add New Employee")
+        new_emp_name = st.text_input("Employee Full Name")
+        new_emp_id = st.text_input("Assign Employee ID (e.g., DLV-DEW-008)")
+        
+        if st.button("➕ Add Employee"):
+            if new_emp_name and new_emp_id:
+                st.session_state["employees"][new_emp_name] = new_emp_id
+                save_employees(st.session_state["employees"])
+                st.success(f"Employee {new_emp_name} added successfully!")
+                st.rerun()
+            else:
+                st.warning("Please fill both Name and Employee ID.")
+                
+    with col_e2:
+        st.markdown("#### Current Employee List")
+        emp_df = pd.DataFrame(list(st.session_state["employees"].items()), columns=["Employee Name", "Employee ID"])
+        st.dataframe(emp_df, use_container_width=True)
+
+# ================= 4. ADMIN & RECYCLE BIN =================
 elif nav_page == "♻️ Admin & Recycle Bin":
     st.markdown("<div class='card-3d'><h3>♻️ Admin Recycle Bin</h3></div>", unsafe_allow_html=True)
     
