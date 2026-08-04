@@ -4,44 +4,72 @@ from datetime import date, timedelta, datetime
 import os
 
 # Page Config
-st.set_page_config(page_title="DELHIVERY – IDRFC6 DEWAS 3D Tracker", layout="wide")
+st.set_page_config(page_title="DELHIVERY – IDRFC6 DEWAS Portal", layout="wide")
 
-# Custom 3D & Modern Glassmorphism CSS Styling
+# Custom 3D & Modern Glassmorphism CSS Styling with Truck/Logistics Vibe
 st.markdown("""
     <style>
     .stApp {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
+    
+    /* Professional 3D Header Banner */
     .main-header {
         background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-        padding: 25px;
-        border-radius: 16px;
+        padding: 30px;
+        border-radius: 18px;
         color: white;
         text-align: center;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-        border-bottom: 4px solid #00d2ff;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+        border-bottom: 5px solid #ff3b30;
         margin-bottom: 25px;
     }
-    .main-header h1 { margin: 0; font-size: 28px; font-weight: 700; }
-    .main-header p { margin: 8px 0 0 0; font-size: 15px; color: #00d2ff; }
-    
+    .main-header h1 { 
+        margin: 0; 
+        font-size: 32px; 
+        font-weight: 800; 
+        letter-spacing: 1px;
+        color: #ffffff;
+    }
+    .main-header p { 
+        margin: 10px 0 0 0; 
+        font-size: 16px; 
+        color: #ffcc00; 
+        font-weight: 600; 
+    }
+
+    /* 3D Container Cards */
     .card-3d {
-        background: rgba(255, 255, 255, 0.9);
-        padding: 20px;
-        border-radius: 14px;
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1), inset 0 1px 2px rgba(255,255,255,0.8);
-        border: 1px solid rgba(255,255,255,0.5);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 25px;
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1), inset 0 1px 3px rgba(255,255,255,0.9);
+        border: 1px solid rgba(255,255,255,0.6);
         margin-bottom: 20px;
+        transition: transform 0.3s ease;
+    }
+    .card-3d:hover {
+        transform: translateY(-3px);
+    }
+    
+    /* Highlight Badge */
+    .badge-hub {
+        background-color: #ff3b30;
+        color: white;
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: bold;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# Header Banner with IDRFC6 DEWAS
+# Header Banner with Truck & Logistics Branding
 st.markdown("""
     <div class="main-header">
-        <h1>📦 DELHIVERY – IDRFC6 DEWAS Tracker</h1>
-        <p>Station: IDRFC6 DEWAS &nbsp;|&nbsp; Managed by: RAJKUMAR &nbsp;|&nbsp; Auto Time & Return Boxes Enabled</p>
+        <h1>🚛 DELHIVERY – IDRFC6 DEWAS WAREHOUSE HUB 📦</h1>
+        <p>⚡ Advanced Automated Logistics & Dispatch Management System &nbsp;|&nbsp; Managed by: RAJKUMAR</p>
     </div>
 """, unsafe_allow_html=True)
 
@@ -56,7 +84,6 @@ def save_data(df): df.to_csv(DATA_FILE, index=False)
 
 def load_reports():
     if os.path.exists(REPORT_FILE): return pd.read_csv(REPORT_FILE)
-    # Added 'Return' column to tracking reports
     return pd.DataFrame(columns=["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
 
 def save_reports(df): df.to_csv(REPORT_FILE, index=False)
@@ -66,6 +93,7 @@ if "dispatch_reports" not in st.session_state: st.session_state["dispatch_report
 
 couriers_list = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "DTDC", "Bluedart", "Ekart"]
 
+# Sidebar Navigation Control Center
 st.sidebar.markdown("### ⚙️ Control Center")
 selected_date = st.sidebar.date_input("Working Date", date.today())
 selected_date_str = str(selected_date)
@@ -73,8 +101,19 @@ yesterday_str = str(selected_date - timedelta(days=1))
 
 nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home Entry Portal", "📊 Analytics & Return/Dispatch Reports"])
 
+# ================= HOME PAGE PORTAL =================
 if nav_page == "🏠 Home Entry Portal":
-    col1, col2 = st.columns([1, 1.3])
+    
+    # Welcome banner on home page with truck visual feel
+    st.markdown("""
+        <div class="card-3d" style="background: linear-gradient(135deg, #ffffff 0%, #f0f4f8 100%); border-left: 6px solid #ff3b30;">
+            <h3>👋 Welcome to IDRFC6 Dewas Dashboard</h3>
+            <p style="color: #555; margin-bottom: 0;">Yahan se aap naye piklist entries, manifest boxes, aur warehouse ki daainik gatividhiyon ko asani se darj kar sakte hain. System aapka mobile time aur automatic +5 min out-time khud manage karega.</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1.4], gap="large")
+    
     with col1:
         st.markdown("<div class='card-3d'><h3>📝 New Warehouse Entry</h3></div>", unsafe_allow_html=True)
         piklist_no = st.text_input("Piklist No.")
@@ -87,7 +126,7 @@ if nav_page == "🏠 Home Entry Portal":
             courier = st.selectbox("Courier", couriers_list)
             parcel_count = st.number_input("Box Count", min_value=1, value=1)
 
-        if st.button("💾 Submit Entry", use_container_width=True):
+        if st.button("💾 Submit Entry Now", use_container_width=True):
             if piklist_no and emp_name:
                 auto_in_time = datetime.now().strftime("%I:%M %p")
                 
@@ -108,16 +147,41 @@ if nav_page == "🏠 Home Entry Portal":
                         new_rep = pd.DataFrame({
                             "Date": [selected_date_str], "Courier": [courier], 
                             "In Time": [auto_in_time], "Out Time": [auto_out_time], 
-                            "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Auto System Logged"]
+                            "Manifest": [int(parcel_count)], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Auto Logged"]
                         })
                         st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
                     save_reports(st.session_state["dispatch_reports"])
                 
-                st.success(f"Entry Saved Successfully!\n\n🕒 In-Time: **{auto_in_time}**")
+                # Save main entry
+                new_row = pd.DataFrame({
+                    "ID": [str(pd.Timestamp.now().timestamp())],
+                    "Date": [selected_date_str],
+                    "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                    "Piklist No.": [str(piklist_no)],
+                    "Employee Name": [emp_name],
+                    "Task Type": [task_type],
+                    "Courier": [courier],
+                    "Parcel Count": [int(parcel_count)]
+                })
+                st.session_state["data"] = pd.concat([st.session_state["data"], new_row], ignore_index=True)
+                save_data(st.session_state["data"])
+
+                st.success(f"Entry Saved Successfully!\n\n🕒 Mobile In-Time: **{auto_in_time}**")
                 st.rerun()
 
+    with col2:
+        st.markdown("<div class='card-3d'><h3>📊 Today's Live Records (" + selected_date_str + ")</h3></div>", unsafe_allow_html=True)
+        df = st.session_state["data"]
+        df_f = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
+        
+        if not df_f.empty:
+            st.dataframe(df_f[["Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"]], use_container_width=True)
+        else:
+            st.info("📦 Aaj ke din abhi tak koi entry darj nahi ki gayi hai. Naye entry baye taraf se bharein.")
+
+# ================= REPORTS & ANALYTICS PAGE =================
 elif nav_page == "📊 Analytics & Return/Dispatch Reports":
-    st.markdown("<div class='card-3d'><h3>🚚 Dispatch, Cancel & Return Parcel Report</h3></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card-3d'><h3>🚚 Dispatch, Cancel & Return Parcel Report Hub</h3></div>", unsafe_allow_html=True)
     rep_df = st.session_state["dispatch_reports"]
     
     with st.form("auto_time_form"):
@@ -130,8 +194,8 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
             
         c_dispatch = st.number_input("Dispatch Boxes (Bheje Gaye)", min_value=0, value=int(curr_row["Dispatch"].values[0]) if not curr_row.empty and "Dispatch" in curr_row.columns else 0)
         c_cancel = st.number_input("Cancel Boxes (Radd Kiye Gaye)", min_value=0, value=int(curr_row["Cancel"].values[0]) if not curr_row.empty and "Cancel" in curr_row.columns else 0)
-        c_return = st.number_input("Return Boxes (Kitne Box Wapas Aaye)", min_value=0, value=int(curr_row["Return"].values[0]) if not curr_row.empty and "Return" in curr_row.columns else 0)
-        c_remark = st.text_input("Remark", value=str(curr_row["Remark"].values[0]) if not curr_row.empty and pd.notna(curr_row["Remark"].values[0]) else "")
+        c_return = st.number_input("Return Boxes (Wapas Aaye Hue)", min_value=0, value=int(curr_row["Return"].values[0]) if not curr_row.empty and "Return" in curr_row.columns else 0)
+        c_remark = st.text_input("Remark / Notes", value=str(curr_row["Remark"].values[0]) if not curr_row.empty and pd.notna(curr_row["Remark"].values[0]) else "")
         
         try:
             p_in = datetime.strptime(default_in.strip(), "%I:%M %p")
@@ -158,13 +222,12 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
                 })
                 st.session_state["dispatch_reports"] = pd.concat([rep_df, new_rep], ignore_index=True)
             save_reports(st.session_state["dispatch_reports"])
-            st.success("Dispatch, Cancel & Return Report Saved Successfully!")
+            st.success("Report Saved Successfully!")
             st.rerun()
 
-    # Calculate Summary with Returns Included
+    # Summary Table Construction
     current_day_rep = rep_df[rep_df["Date"] == selected_date_str] if not rep_df.empty else pd.DataFrame()
     
-    # Yesterday pending map
     yest_pend_map = {}
     yest_rep_view = rep_df[rep_df["Date"] == yesterday_str] if not rep_df.empty else pd.DataFrame()
     for c in couriers_list:
@@ -190,7 +253,6 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
         rem = str(c_curr["Remark"].values[0]) if not c_curr.empty and pd.notna(c_curr["Remark"].values[0]) else ""
         y_pend = yest_pend_map.get(c, 0)
         
-        # Formula including Returns
         final_pend = max(0, (man + y_pend) - can - dis + ret)
         
         display_summary_rows.append({
@@ -206,5 +268,5 @@ elif nav_page == "📊 Analytics & Return/Dispatch Reports":
             "Remark": rem
         })
         
-    st.markdown("#### 📋 Final Courier Status & Return Summary Table")
+    st.markdown("#### 📋 Final Status Summary Table")
     st.dataframe(pd.DataFrame(display_summary_rows), use_container_width=True)
