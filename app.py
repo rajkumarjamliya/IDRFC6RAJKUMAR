@@ -109,7 +109,7 @@ def load_admin_password():
             return str(df["Password"].values[0])
         except:
             pass
-    return "123"
+    return "123654"  # Updated default password
 
 def save_admin_password(new_pass):
     df = pd.DataFrame({"Password": [new_pass]})
@@ -173,7 +173,7 @@ nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Piklist & Entry Portal", "
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Security Panel")
-st.sidebar.info("💡 Default Password: **123**")
+# Password display removed completely from sidebar as requested
 
 if not st.session_state["admin_logged"]:
     entered_pass = st.sidebar.text_input("Enter Admin Password", type="password")
@@ -398,7 +398,6 @@ elif nav_page == "👥 Employee & Courier Management":
     with col_e1:
         st.markdown("#### 👤 Employee Management")
         
-        # Add Employee
         with st.form("add_emp_form"):
             st.markdown("**Add New Employee**")
             new_emp_name = st.text_input("Employee Full Name")
@@ -412,7 +411,6 @@ elif nav_page == "👥 Employee & Courier Management":
                 else:
                     st.warning("Please fill both Name and Employee ID.")
 
-        # Delete Employee
         with st.form("del_emp_form"):
             st.markdown("**Remove Existing Employee**")
             del_emp_name = st.selectbox("Select Employee to Remove", list(st.session_state["employees"].keys()))
@@ -430,7 +428,6 @@ elif nav_page == "👥 Employee & Courier Management":
     with col_e2:
         st.markdown("#### 🚚 Courier Management")
         
-        # Add Courier
         with st.form("add_cour_form"):
             st.markdown("**Add New Courier Company**")
             new_cour_name = st.text_input("Courier Company Name")
@@ -443,7 +440,6 @@ elif nav_page == "👥 Employee & Courier Management":
                 else:
                     st.warning("Please enter a valid or unique Courier name.")
 
-        # Delete Courier
         with st.form("del_cour_form"):
             st.markdown("**Remove Existing Courier Company**")
             del_cour_name = st.selectbox("Select Courier to Remove", st.session_state["couriers"])
@@ -465,11 +461,10 @@ elif nav_page == "♻️ Admin & Recycle Bin":
     st.markdown("<div class='card-3d'><h3>♻️ Admin Panel & Recycle Bin</h3></div>", unsafe_allow_html=True)
     
     if not st.session_state["admin_logged"]:
-        st.warning("🔒 Sidebar mein password dalkar Admin Mode unlock karein (Default Password: `123`).")
+        st.warning("🔒 Sidebar mein password dalkar Admin Mode unlock karein.")
     else:
         st.success("✅ Admin Access Granted.")
         
-        # Password Change Section
         st.markdown("#### 🔑 Change Admin Password")
         with st.form("change_pass_form"):
             new_admin_pass = st.text_input("Enter New Admin Password", type="password")
