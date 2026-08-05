@@ -139,11 +139,12 @@ couriers_list = st.session_state["couriers"]
 
 # Sidebar Controls
 st.sidebar.markdown("### ⚙️ Control Center")
+# Default date is automatically set to server's today date
 selected_date = st.sidebar.date_input("Select Working / Report Date", date.today())
 selected_date_str = str(selected_date)
 yesterday_str = str(selected_date - timedelta(days=1))
 
-nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home & Work Entry Portal", "📊 Courier & Dispatch Report", "👥 Employee & Courier Management", "♻️ Admin & Recycle Bin"])
+nav_page = st.sidebar.radio("Navigation Menu", ["🏠 Home & Main Work Data", "📊 Courier & Dispatch Report", "👥 Employee & Courier Management", "♻️ Admin & Recycle Bin"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🔐 Admin Security")
@@ -161,123 +162,121 @@ else:
         st.session_state["admin_logged"] = False
         st.rerun()
 
-# ================= 1. HOME & ENTRY PORTAL =================
-if nav_page == "🏠 Home & Work Entry Portal":
-    st.markdown("<div class='card-3d'><h3>📝 Employee Task & Piklist Entry Portal</h3></div>", unsafe_allow_html=True)
+# ================= 1. HOME & MAIN WORK DATA (HOME PAGE) =================
+if nav_page == "🏠 Home & Main Work Data":
+    st.markdown(f"<div class='card-3d'><h3>🏠 Home Page - Live Work & Piklist Data ({selected_date_str})</h3></div>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 1.4], gap="large")
+    df = st.session_state["data"]
+    df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
     
-    with col1:
-        with st.form("entry_form"):
+    if not df_f.empty:
+        st.markdown("#### 📋 Today's Recorded Entries")
+        display_cols = ["Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "Time"]
+        st.dataframe(df_f[display_cols], use_container_width=True)
+        
+        csv_data = df_f.to_csv(index=False).encode('utf-8')
+        st.download_button("📥 Download Work Report (CSV)", csv_data, f"work_report_{selected_date_str}.csv", "text/csv")
+        
+        st.markdown("#### ✏️ Edit / Delete Entry")
+        edit_id = st.selectbox("Select Entry ID", df_f["ID"].astype(str).tolist())
+        selected_row = df_f[df_f["ID"].astype(str) == edit_id]
+        if not selected_row.empty:
+            with st.form("edit_entry_form"):
+                new_pikl = st.text_input("Edit Piklist No.", value=str(selected_row["Piklist No."].values[0]))
+                new_task = st.selectbox("Edit Task Type", ["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"], index=["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"].index(selected_row["Task Type"].values[0]) if selected_row["Task Type"].values[0] in ["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"] else 0)
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    if st.form_submit_button("Update Entry"):
+                        idx = df[df["ID"].astype(str) == edit_id].index[0]
+                        st.session_state["data"].loc[idx, "Piklist No."] = new_pikl
+                        st.session_state["data"].loc[idx, "Task Type"] = new_task
+                        save_data(st.session_state["data"])
+                        st.success("Updated!")
+                        st.rerun()
+                with col_e2:
+                    if st.form_submit_button("🗑️ Delete Entry"):
+                        target = df[df["ID"].astype(str) == edit_id]
+                        trash_row = target.copy()
+                        trash_row["Deleted Time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        st.session_state["trash_data"] = pd.concat([st.session_state["trash_data"], trash_row], ignore_index=True)
+                        save_trash(st.session_state["trash_data"])
+                        
+                        st.session_state["data"] = df[df["ID"].astype(str) != edit_id]
+                        save_data(st.session_state["data"])
+                        st.success("Deleted!")
+                        st.rerun()
+    else:
+        st.info("No work entries found for this date yet.")
+
+    st.markdown("---")
+    st.markdown("#### ➕ Add New Piklist / Employee Task Entry")
+    with st.form("entry_form"):
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
             piklist_no = st.text_input("Piklist No.")
             emp_list = list(st.session_state["employees"].keys())
             selected_emp = st.selectbox("Select Employee Name", emp_list)
             auto_emp_id = st.session_state["employees"].get(selected_emp, "N/A")
             st.markdown(f"🆔 **Employee ID:** `{auto_emp_id}`")
-            
+        with col_f2:
             task_type = st.selectbox("Task Type", ["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"])
-            
             courier = "N/A"
             parcel_count = 1
             if task_type in ["Manifest", "Cancel", "Return"]:
                 courier = st.selectbox("Select Courier Company", couriers_list)
                 parcel_count = st.number_input("Box / Parcel Count", min_value=1, value=1)
 
-            current_time_str = datetime.now().strftime("%I:%M:%S %p")
-            st.info(f"🕒 Action Time (Auto): **{current_time_str}**")
+        # Automatically capture system current time when saving
+        current_time_str = datetime.now().strftime("%I:%M:%S %p")
+        st.info(f"🕒 Server / System Time (Automatic): **{current_time_str}**")
 
-            submitted = st.form_submit_button("💾 Save Entry", use_container_width=True)
-            if submitted:
-                if piklist_no and selected_emp:
-                    # Update Courier Dispatch Reports automatically based on task type
-                    if courier != "N/A":
-                        rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
-                        ex = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
-                        
-                        col_target = "Manifest"
-                        if task_type == "Cancel": col_target = "Cancel"
-                        elif task_type == "Return": col_target = "Return"
+        submitted = st.form_submit_button("💾 Save Entry", use_container_width=True)
+        if submitted:
+            if piklist_no and selected_emp:
+                if courier != "N/A":
+                    rep_df = sanitize_reports_df(st.session_state["dispatch_reports"])
+                    ex = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
+                    
+                    col_target = "Manifest"
+                    if task_type == "Cancel": col_target = "Cancel"
+                    elif task_type == "Return": col_target = "Return"
 
-                        if not ex.empty:
-                            idx = ex.index[0]
-                            rep_df.loc[idx, col_target] += int(parcel_count)
-                        else:
-                            new_row_rep = {
-                                "Date": selected_date_str, "Courier": courier, "In Time": "10:00 AM", "Out Time": "07:00 PM",
-                                "Manifest": int(parcel_count) if task_type == "Manifest" else 0,
-                                "Cancel": int(parcel_count) if task_type == "Cancel" else 0,
-                                "Dispatch": 0,
-                                "Return": int(parcel_count) if task_type == "Return" else 0,
-                                "Remark": ""
-                            }
-                            rep_df = pd.concat([rep_df, pd.DataFrame([new_row_rep])], ignore_index=True)
-                        st.session_state["dispatch_reports"] = sanitize_reports_df(rep_df)
-                        save_reports(st.session_state["dispatch_reports"])
+                    if not ex.empty:
+                        idx = ex.index[0]
+                        rep_df.loc[idx, col_target] += int(parcel_count)
+                    else:
+                        new_row_rep = {
+                            "Date": selected_date_str, "Courier": courier, 
+                            "In Time": datetime.now().strftime("%I:%M:%S %p"), # Automatic Server In-Time
+                            "Out Time": "07:00 PM",
+                            "Manifest": int(parcel_count) if task_type == "Manifest" else 0,
+                            "Cancel": int(parcel_count) if task_type == "Cancel" else 0,
+                            "Dispatch": 0,
+                            "Return": int(parcel_count) if task_type == "Return" else 0,
+                            "Remark": ""
+                        }
+                        rep_df = pd.concat([rep_df, pd.DataFrame([new_row_rep])], ignore_index=True)
+                    st.session_state["dispatch_reports"] = sanitize_reports_df(rep_df)
+                    save_reports(st.session_state["dispatch_reports"])
 
-                    new_entry = pd.DataFrame({
-                        "ID": [str(pd.Timestamp.now().timestamp())],
-                        "Date": [selected_date_str],
-                        "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                        "Piklist No.": [str(piklist_no)],
-                        "Employee Name": [selected_emp],
-                        "Emp ID": [auto_emp_id],
-                        "Task Type": [task_type],
-                        "Courier": [courier],
-                        "Parcel Count": [int(parcel_count)],
-                        "Time": [current_time_str]
-                    })
-                    st.session_state["data"] = pd.concat([st.session_state["data"], new_entry], ignore_index=True)
-                    save_data(st.session_state["data"])
-                    st.success("Entry Saved Successfully!")
-                    st.rerun()
-                else:
-                    st.warning("Please enter Piklist No. and Employee Name.")
-
-    with col2:
-        st.markdown(f"<h3>📋 Work & Piklist Entries ({selected_date_str})</h3>", unsafe_allow_html=True)
-        df = st.session_state["data"]
-        df_f = df[df["Date"] == selected_date_str] if not df.empty and "Date" in df.columns else pd.DataFrame()
-        
-        if not df_f.empty:
-            display_cols = ["Piklist No.", "Employee Name", "Emp ID", "Task Type", "Courier", "Parcel Count", "Time"]
-            st.dataframe(df_f[display_cols], use_container_width=True)
-            
-            # Excel Export for Work Report
-            csv_data = df_f.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Work Report (CSV)", csv_data, f"work_report_{selected_date_str}.csv", "text/csv")
-            
-            # Editing & Deleting entries from Home page if needed
-            if st.session_state["admin_logged"] or True: # Allow editing/deleting for convenience
-                st.markdown("#### ✏️ Edit / Delete Entry")
-                edit_id = st.selectbox("Select Entry ID", df_f["ID"].astype(str).tolist())
-                selected_row = df_f[df_f["ID"].astype(str) == edit_id]
-                if not selected_row.empty:
-                    with st.form("edit_entry_form"):
-                        new_pikl = st.text_input("Edit Piklist No.", value=str(selected_row["Piklist No."].values[0]))
-                        new_task = st.selectbox("Edit Task Type", ["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"], index=["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"].index(selected_row["Task Type"].values[0]) if selected_row["Task Type"].values[0] in ["Picking", "Packing", "Scanning", "Manifest", "Cancel", "Return"] else 0)
-                        col_e1, col_e2 = st.columns(2)
-                        with col_e1:
-                            if st.form_submit_button("Update Entry"):
-                                idx = df[df["ID"].astype(str) == edit_id].index[0]
-                                st.session_state["data"].loc[idx, "Piklist No."] = new_pikl
-                                st.session_state["data"].loc[idx, "Task Type"] = new_task
-                                save_data(st.session_state["data"])
-                                st.success("Updated!")
-                                st.rerun()
-                        with col_e2:
-                            if st.form_submit_button("🗑️ Delete Entry"):
-                                target = df[df["ID"].astype(str) == edit_id]
-                                trash_row = target.copy()
-                                trash_row["Deleted Time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                st.session_state["trash_data"] = pd.concat([st.session_state["trash_data"], trash_row], ignore_index=True)
-                                save_trash(st.session_state["trash_data"])
-                                
-                                st.session_state["data"] = df[df["ID"].astype(str) != edit_id]
-                                save_data(st.session_state["data"])
-                                st.success("Deleted!")
-                                st.rerun()
-        else:
-            st.info("No entries found for this date.")
+                new_entry = pd.DataFrame({
+                    "ID": [str(pd.Timestamp.now().timestamp())],
+                    "Date": [selected_date_str],
+                    "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+                    "Piklist No.": [str(piklist_no)],
+                    "Employee Name": [selected_emp],
+                    "Emp ID": [auto_emp_id],
+                    "Task Type": [task_type],
+                    "Courier": [courier],
+                    "Parcel Count": [int(parcel_count)],
+                    "Time": [current_time_str] # Saved automatically
+                })
+                st.session_state["data"] = pd.concat([st.session_state["data"], new_entry], ignore_index=True)
+                save_data(st.session_state["data"])
+                st.success("Entry Saved Successfully with Automatic Time!")
+                st.rerun()
+            else:
+                st.warning("Please enter Piklist No. and Employee Name.")
 
 # ================= 2. COURIER & DISPATCH REPORT =================
 elif nav_page == "📊 Courier & Dispatch Report":
@@ -290,7 +289,12 @@ elif nav_page == "📊 Courier & Dispatch Report":
         sel_c = st.selectbox("Select Courier Company", couriers_list)
         curr_row = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == sel_c)]
         
-        c_in = st.text_input("In Time (Auto / Manual)", value=str(curr_row["In Time"].values[0]) if not curr_row.empty and curr_row["In Time"].values[0] != "--:--" else datetime.now().strftime("%I:%M:%S %p"))
+        # Automatic system time default for In Time if not already set
+        default_in_time = datetime.now().strftime("%I:%M:%S %p")
+        if not curr_row.empty and curr_row["In Time"].values[0] != "--:--":
+            default_in_time = str(curr_row["In Time"].values[0])
+
+        c_in = st.text_input("In Time (Auto / Server Time)", value=default_in_time)
         c_out = st.text_input("Out Time", value=str(curr_row["Out Time"].values[0]) if not curr_row.empty else "07:00 PM")
         
         man_v = st.number_input("Manifest Boxes", min_value=0, value=int(curr_row["Manifest"].values[0]) if not curr_row.empty else 0)
@@ -311,7 +315,6 @@ elif nav_page == "📊 Courier & Dispatch Report":
             st.success("Report Saved!")
             st.rerun()
 
-    # Build Exact Image Table Format
     current_day_rep = rep_df[rep_df["Date"] == selected_date_str]
     yest_rep_view = rep_df[rep_df["Date"] == yesterday_str]
     
@@ -335,7 +338,7 @@ elif nav_page == "📊 Courier & Dispatch Report":
         ca = int(cr["Cancel"].values[0]) if not cr.empty else 0
         d = int(cr["Dispatch"].values[0]) if not cr.empty else 0
         r = int(cr["Return"].values[0]) if not cr.empty else 0
-        yp = yest_pend.get(c, 0)
+        yp = yest_pend.Fget if hasattr(yest_pend, 'Fget') else yest_pend.get(c, 0)
         pend = max(0, (m + yp) - ca - d + r)
         rem = str(cr["Remark"].values[0]) if not cr.empty and pd.notna(cr["Remark"].values[0]) else ""
         
@@ -361,7 +364,6 @@ elif nav_page == "📊 Courier & Dispatch Report":
     st.markdown(f"#### 📋 Courier Status Table for Date: `{selected_date_str}`")
     st.dataframe(final_report_df, use_container_width=True)
 
-    # Excel Download
     csv_rep = final_report_df.to_csv(index=False).encode('utf-8')
     st.download_button("📥 Download Courier Report (CSV/Excel)", csv_rep, f"courier_report_{selected_date_str}.csv", "text/csv")
 
