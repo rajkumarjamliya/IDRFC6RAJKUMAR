@@ -1,50 +1,51 @@
 from datetime import date, datetime, timedelta
+import io
 import os
 import urllib.parse
 import pandas as pd
 import streamlit as st
 
-# ================= PAGE CONF & WEB THEME (Delhivery Style) =================
+# ================= PAGE CONF & WEB THEME (Delhivery Red/Dark Style) =================
 st.set_page_config(
     page_title="IDRFC6 – DEWAS Logistics Portal", 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
 
-# Delhivery Red & Dark Grey Theme CSS
 st.markdown(
     """
  <style>
  .stApp {
      background-color: #f4f7f6;
-     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+     font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
  }
  .main-header {
-     background-color: #2e363c;
-     padding: 20px;
-     border-radius: 10px;
+     background: linear-gradient(135deg, #2e363c 0%, #1a1e21 100%);
+     padding: 24px;
+     border-radius: 12px;
      color: white;
      text-align: center;
-     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+     box-shadow: 0 6px 20px rgba(0,0,0,0.15);
      border-bottom: 5px solid #e31d2b;
      margin-bottom: 25px;
  }
  .main-header h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 1px; color: #ffffff; }
- .main-header p { margin: 5px 0 0 0; font-size: 16px; color: #fdfdfd; font-weight: 400; opacity: 0.9; }
+ .main-header p { margin: 6px 0 0 0; font-size: 15px; color: #e1e8ed; font-weight: 400; }
  
  .wab-card {
      background-color: #ffffff;
-     padding: 20px;
+     padding: 22px;
      border-radius: 12px;
-     box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
      border: 1px solid #e1e8ed;
-     margin-bottom: 20px;
+     margin-bottom: 22px;
  }
  .wab-card h4, .wab-card h3 {
      color: #2e363c;
      border-bottom: 2px solid #e31d2b;
-     padding-bottom: 10px;
+     padding-bottom: 8px;
      margin-top: 0;
+     font-weight: 700;
  }
 
  div.stButton > button:first-child {
@@ -52,12 +53,14 @@ st.markdown(
      color: white !important;
      border: none !important;
      border-radius: 6px !important;
-     padding: 8px 18px !important;
+     padding: 10px 20px !important;
      font-weight: 600 !important;
      width: 100%;
+     transition: all 0.2s ease-in-out;
  }
  div.stButton > button:first-child:hover {
      background-color: #b51722 !important;
+     box-shadow: 0 4px 10px rgba(227, 29, 43, 0.3) !important;
  }
  
  .wa-btn-container a {
@@ -110,12 +113,12 @@ def save_data(df):
 def load_reports():
     if os.path.exists(REPORT_FILE):
         df = pd.read_csv(REPORT_FILE)
-        cols = ["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
+        cols = ["Date", "Courier", "Vehicle No", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"]
         for col in cols: 
             if col not in df.columns: 
-                df[col] = (0 if col in ["Manifest", "Cancel", "Dispatch", "Return"] else "--:--")
+                df[col] = (0 if col in ["Manifest", "Cancel", "Dispatch", "Return"] else ("--" if col == "Vehicle No" else "--:--"))
         return df
-    return pd.DataFrame(columns=["Date", "Courier", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
+    return pd.DataFrame(columns=["Date", "Courier", "Vehicle No", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
 
 def save_reports(df):
     df.to_csv(REPORT_FILE, index=False)
@@ -136,27 +139,42 @@ def load_employees():
 def save_employees(df): df.to_csv(EMP_FILE, index=False)
 
 def load_couriers():
-    if os.path.exists(COURIER_FILE): return pd.read_csv(COURIER_FILE)["Courier Name"].tolist()
-    default_cour = ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "Ekart"]
-    pd.DataFrame({"Courier Name": default_cour}).to_csv(COURIER_FILE, index=False)
+    if os.path.exists(COURIER_FILE): 
+        df = pd.read_csv(COURIER_FILE)
+        if "Vehicle No" not in df.columns:
+            df["Vehicle No"] = "MP09-XX-0000"
+        return df
+    
+    default_cour = pd.DataFrame({
+        "Courier Name": ["Delhivery", "Shadowfax", "ATS", "Xpressbees", "Ekart"],
+        "Vehicle No": ["MP09-AB-1234", "MP09-CD-5678", "MP09-EF-9012", "MP09-GH-3456", "MP09-IJ-7890"]
+    })
+    default_cour.to_csv(COURIER_FILE, index=False)
     return default_cour
 
-def save_couriers(cour_list): pd.DataFrame({"Courier Name": cour_list}).to_csv(COURIER_FILE, index=False)
+def save_couriers(df): 
+    df.to_csv(COURIER_FILE, index=False)
+
+def convert_df_to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+    return output.getvalue()
 
 # ================= SESSION INITIALIZATION =================
 if "data" not in st.session_state: st.session_state["data"] = load_data()
 if "dispatch_reports" not in st.session_state: st.session_state["dispatch_reports"] = load_reports()
 if "trash_data" not in st.session_state: st.session_state["trash_data"] = load_trash()
 if "employees" not in st.session_state: st.session_state["employees"] = load_employees()
-if "couriers" not in st.session_state: st.session_state["couriers"] = load_couriers()
+if "couriers_df" not in st.session_state: st.session_state["couriers_df"] = load_couriers()
 if "admin_logged" not in st.session_state: st.session_state["admin_logged"] = False
 
 # ================= WEB HEADER =================
 st.markdown(
     """
 <div class="main-header">
-    <h1>IDRFC6 DEWAS OPERATION TEAM</h1>
-    <p>⚡ Automated Logistics, Manifest, and Dispatch Management System | Operator: RAJKUMAR</p>
+    <h1>IDRFC6 DEWAS OPERATION PORTAL</h1>
+    <p>⚡ High-Speed Warehouse Operations & Dispatch Management System | Lead Operator: RAJKUMAR</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -171,11 +189,11 @@ with st.sidebar:
 
     nav_page = st.radio(
         "🌐 Navigation Menu",
-        ["🏠 Home Operations", "📊 Employee Productivity", "♻️ Admin & Recycle Bin"]
+        ["🏠 Home Operations", "📊 Employee Productivity", "🔐 Admin & Data Export"]
     )
 
     st.markdown("---")
-    st.markdown("### 🔐 SECURITY")
+    st.markdown("### 🔐 SECURITY LOCK")
     ADMIN_PASS = "123"
     if not st.session_state["admin_logged"]:
         entered_pass = st.text_input("Enter Admin Password", type="password")
@@ -184,9 +202,9 @@ with st.sidebar:
                 st.session_state["admin_logged"] = True
                 st.rerun()
             else: 
-                st.error("Wrong password!")
+                st.error("Invalid Admin Password!")
     else:
-        st.success("🔓 Admin Unlocked")
+        st.success("🔓 Admin Access Active")
         if st.button("Lock Admin"):
             st.session_state["admin_logged"] = False
             st.rerun()
@@ -194,6 +212,22 @@ with st.sidebar:
 # ================= PAGE 1: HOME OPERATIONS =================
 if nav_page == "🏠 Home Operations":
     
+    # METRICS DASHBOARD
+    df = st.session_state["data"]
+    df_today = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
+    
+    total_parcels = df_today["Parcel Count"].sum() if not df_today.empty else 0
+    total_entries = len(df_today) if not df_today.empty else 0
+    active_emps = df_today["Employee Name"].nunique() if not df_today.empty else 0
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("📦 Total Parcels Today", total_parcels)
+    m2.metric("📝 Entries Logged", total_entries)
+    m3.metric("👷 Active Staff Today", active_emps)
+
+    couriers_df = st.session_state["couriers_df"]
+    courier_list = couriers_df["Courier Name"].tolist()
+
     st.markdown('<div class="wab-card"><h3>📝 New Work Entry</h3></div>', unsafe_allow_html=True)
     with st.container():
         col1, col2, col3 = st.columns([1, 1, 1.2])
@@ -205,7 +239,7 @@ if nav_page == "🏠 Home Operations":
             emp_id = ""
             if selected_emp_name != "-- Select --":
                 emp_id = emp_df[emp_df["Employee Name"] == selected_emp_name]["Employee ID"].values[0]
-                st.caption(f"Employee ID: {emp_id}")
+                st.caption(f"ID: {emp_id}")
 
         with col2:
             task_type = st.selectbox("🛠️ Task Type", ["Picking", "Packing", "Scanning", "Load", "Unload", "Manifest"])
@@ -214,12 +248,12 @@ if nav_page == "🏠 Home Operations":
         with col3:
             courier = "N/A"
             if task_type == "Manifest":
-                courier = st.selectbox("🚚 Select Courier Company", st.session_state["couriers"])
+                courier = st.selectbox("🚚 Select Courier Company", courier_list)
                 st.warning(f"Manifesting: {parcel_count} boxes for {courier}")
             
             st.write("")
             st.write("")
-            if st.button("💾 Submit Entry"):
+            if st.button("💾 Submit Work Entry"):
                 if piklist_no and selected_emp_name != "-- Select --":
                     now = datetime.now()
                     current_time = now.strftime("%Y-%m-%d %H:%M:%S")
@@ -243,6 +277,8 @@ if nav_page == "🏠 Home Operations":
                         rep_df = st.session_state["dispatch_reports"]
                         curr_cour = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
                         
+                        v_no = couriers_df[couriers_df["Courier Name"] == courier]["Vehicle No"].values[0] if courier in couriers_df["Courier Name"].values else "--"
+
                         if not curr_cour.empty:
                             idx = curr_cour.index[0]
                             rep_df.loc[idx, "Manifest"] += int(parcel_count)
@@ -250,6 +286,7 @@ if nav_page == "🏠 Home Operations":
                             new_rep = pd.DataFrame({
                                 "Date": [selected_date_str], 
                                 "Courier": [courier],
+                                "Vehicle No": [v_no],
                                 "In Time": ["--:--"], 
                                 "Out Time": ["--:--"],
                                 "Manifest": [int(parcel_count)], 
@@ -262,68 +299,73 @@ if nav_page == "🏠 Home Operations":
                         st.session_state["dispatch_reports"] = rep_df
                         save_reports(rep_df)
 
-                    st.success("Entry Saved!")
+                    st.success("Entry Saved Successfully!")
                     st.rerun()
                 else: 
-                    st.error("Piklist No. and Employee are mandatory!")
+                    st.error("Piklist No. and Employee selection are required!")
 
     # LIVE RECORDS TABLE
-    st.markdown(f'<div class="wab-card"><h4>📋 Live Task Records ({selected_date_str})</h4></div>', unsafe_allow_html=True)
-    df = st.session_state["data"]
-    df_today = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
-    
+    st.markdown(f'<div class="wab-card"><h4>📋 Live Task Log ({selected_date_str})</h4></div>', unsafe_allow_html=True)
     if not df_today.empty:
         st.dataframe(
             df_today[["Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"]].sort_values(by="Timestamp", ascending=False),
             use_container_width=True
         )
     else: 
-        st.info("No records for today yet.")
+        st.info("No records logged for today yet.")
 
     st.markdown("---")
     
-    # ================= 🚚 DEDICATED DISPATCH TIMING & BOX ENTRY HUB =================
+    # DISPATCH HUB
     st.markdown(f'<div class="wab-card"><h3>🚚 Courier Dispatch Live Hub ({selected_date_str})</h3></div>', unsafe_allow_html=True)
     
     rep_df = st.session_state["dispatch_reports"]
-
     col_in, col_box, col_out = st.columns([1, 1.2, 1], gap="medium")
 
-    # 1. IN-TIME MODULE
+    # 1. IN-TIME MODULE WITH AUTO VEHICLE NO
     with col_in:
         st.markdown("#### 1. 📌 Courier In-Time")
-        c_in_sel = st.selectbox("Select Courier (IN)", st.session_state["couriers"], key="c_in_key")
+        c_in_sel = st.selectbox("Select Courier (IN)", courier_list, key="c_in_key")
+        
+        default_v = couriers_df[couriers_df["Courier Name"] == c_in_sel]["Vehicle No"].values[0] if c_in_sel in couriers_df["Courier Name"].values else ""
+        c_in_veh = st.text_input("🚚 Vehicle No.", value=default_v, key="c_in_veh_key")
+
         if st.button("📌 Click for Auto IN-Time"):
             now_in = datetime.now().strftime("%I:%M %p")
             curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_in_sel)]
             if not curr_r.empty:
                 idx = curr_r.index[0]
                 rep_df.loc[idx, "In Time"] = now_in
+                rep_df.loc[idx, "Vehicle No"] = c_in_veh
             else:
                 new_r = pd.DataFrame({
                     "Date": [selected_date_str], "Courier": [c_in_sel],
+                    "Vehicle No": [c_in_veh],
                     "In Time": [now_in], "Out Time": ["--:--"],
                     "Manifest": [0], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["In-Time Marked"]
                 })
                 rep_df = pd.concat([rep_df, new_r], ignore_index=True)
             st.session_state["dispatch_reports"] = rep_df
             save_reports(rep_df)
-            st.success(f"In-Time {now_in} saved for {c_in_sel}")
+            st.success(f"In-Time {now_in} saved for {c_in_sel} (Gadi: {c_in_veh})")
             st.rerun()
 
     # 2. DISPATCH BOX ENTRY MODULE
     with col_box:
         st.markdown("#### 2. 📦 Dispatch Box Entry")
-        c_box_sel = st.selectbox("Select Courier (Dispatch)", st.session_state["couriers"], key="c_box_key")
-        box_qty = st.number_input("Dispatch Boxes", min_value=1, value=10, step=1)
+        c_box_sel = st.selectbox("Select Courier (Dispatch)", courier_list, key="c_box_key")
+        box_qty = st.number_input("Dispatch Boxes Count", min_value=1, value=10, step=1)
         if st.button("📦 Add Dispatch Boxes"):
             curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_box_sel)]
+            v_no = couriers_df[couriers_df["Courier Name"] == c_box_sel]["Vehicle No"].values[0] if c_box_sel in couriers_df["Courier Name"].values else "--"
+
             if not curr_r.empty:
                 idx = curr_r.index[0]
                 rep_df.loc[idx, "Dispatch"] += int(box_qty)
             else:
                 new_r = pd.DataFrame({
                     "Date": [selected_date_str], "Courier": [c_box_sel],
+                    "Vehicle No": [v_no],
                     "In Time": ["--:--"], "Out Time": ["--:--"],
                     "Manifest": [0], "Cancel": [0], "Dispatch": [int(box_qty)], "Return": [0], "Remark": ["Box Entry Added"]
                 })
@@ -336,16 +378,19 @@ if nav_page == "🏠 Home Operations":
     # 3. OUT-TIME MODULE
     with col_out:
         st.markdown("#### 3. 🏁 Courier Out-Time")
-        c_out_sel = st.selectbox("Select Courier (OUT)", st.session_state["couriers"], key="c_out_key")
+        c_out_sel = st.selectbox("Select Courier (OUT)", courier_list, key="c_out_key")
         if st.button("🏁 Click for Auto OUT-Time"):
             now_out = datetime.now().strftime("%I:%M %p")
             curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_out_sel)]
+            v_no = couriers_df[couriers_df["Courier Name"] == c_out_sel]["Vehicle No"].values[0] if c_out_sel in couriers_df["Courier Name"].values else "--"
+
             if not curr_r.empty:
                 idx = curr_r.index[0]
                 rep_df.loc[idx, "Out Time"] = now_out
             else:
                 new_r = pd.DataFrame({
                     "Date": [selected_date_str], "Courier": [c_out_sel],
+                    "Vehicle No": [v_no],
                     "In Time": ["--:--"], "Out Time": [now_out],
                     "Manifest": [0], "Cancel": [0], "Dispatch": [0], "Return": [0], "Remark": ["Out-Time Marked"]
                 })
@@ -355,9 +400,8 @@ if nav_page == "🏠 Home Operations":
             st.success(f"Out-Time {now_out} saved for {c_out_sel}")
             st.rerun()
 
-    # LIVE SUMMARY TABLE
     st.markdown("---")
-    st.markdown("#### 📊 Live Dispatch Report Table")
+    st.markdown("#### 📊 Live Dispatch Summary Table")
     
     today_ops = df_today[df_today["Task Type"] == "Manifest"] if not df_today.empty else pd.DataFrame()
     today_disp_rep = rep_df[rep_df["Date"] == selected_date_str] if not rep_df.empty else pd.DataFrame()
@@ -367,12 +411,15 @@ if nav_page == "🏠 Home Operations":
     whatsapp_text = f"*IDRFC6 DEWAS - DISPATCH REPORT*\n📅 Date: {selected_date_str}\n-----------------------------------\n"
     total_pend = 0
 
-    for c_name in st.session_state["couriers"]:
+    for c_name in courier_list:
         man_ops = today_ops[today_ops["Courier"] == c_name]["Parcel Count"].sum() if not today_ops.empty else 0
         c_rep = today_disp_rep[today_disp_rep["Courier"] == c_name]
         man_rep = int(c_rep["Manifest"].values[0]) if not c_rep.empty else 0
         man_final = max(man_ops, man_rep)
         
+        default_v = couriers_df[couriers_df["Courier Name"] == c_name]["Vehicle No"].values[0] if c_name in couriers_df["Courier Name"].values else "--"
+        veh_no = c_rep["Vehicle No"].values[0] if (not c_rep.empty and str(c_rep["Vehicle No"].values[0]) != "--") else default_v
+
         in_t = c_rep["In Time"].values[0] if not c_rep.empty else "--:--"
         out_t = c_rep["Out Time"].values[0] if not c_rep.empty else "--:--"
         can = int(c_rep["Cancel"].values[0]) if not c_rep.empty else 0
@@ -388,6 +435,7 @@ if nav_page == "🏠 Home Operations":
         
         final_rows.append({
             "Courier": c_name, 
+            "Gadi No.": veh_no,
             "In Time": in_t, 
             "Out Time": out_t,
             "Yes. Pend": y_pend, 
@@ -399,7 +447,7 @@ if nav_page == "🏠 Home Operations":
             "Remark": remark
         })
         
-        whatsapp_text += f"🚚 *{c_name}*: In:{in_t} | Out:{out_t} | Man:{man_final} | Disp:{disp} | Can:{can} | *Pend:{pend}*\n"
+        whatsapp_text += f"🚚 *{c_name}* ({veh_no}): In:{in_t} | Out:{out_t} | Man:{man_final} | Disp:{disp} | *Pend:{pend}*\n"
 
     st.dataframe(pd.DataFrame(final_rows), use_container_width=True)
     
@@ -414,30 +462,88 @@ if nav_page == "🏠 Home Operations":
 
 # ================= PAGE 2: EMPLOYEE PRODUCTIVITY =================
 elif nav_page == "📊 Employee Productivity":
-    st.markdown(f'<div class="wab-card"><h3>📊 Employee Work Report ({selected_date_str})</h3></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="wab-card"><h3>📊 Employee Performance & Contribution % ({selected_date_str})</h3></div>', unsafe_allow_html=True)
     df = st.session_state["data"]
     df_today = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
     
     if not df_today.empty:
-        emp_prod = df_today.groupby(["Employee ID", "Employee Name", "Task Type"])["Parcel Count"].sum().reset_index()
-        pivot_prod = emp_prod.pivot(index=["Employee ID", "Employee Name"], columns="Task Type", values="Parcel Count").reset_index().fillna(0)
+        emp_summary = df_today.groupby(["Employee ID", "Employee Name"])["Parcel Count"].sum().reset_index()
+        total_team_parcels = emp_summary["Parcel Count"].sum()
         
-        st.dataframe(pivot_prod, use_container_width=True)
+        if total_team_parcels > 0:
+            emp_summary["Contribution %"] = ((emp_summary["Parcel Count"] / total_team_parcels) * 100).round(2)
+        else:
+            emp_summary["Contribution %"] = 0.0
+
+        emp_summary = emp_summary.sort_values(by="Parcel Count", ascending=False)
+
+        col_p1, col_p2 = st.columns([1.2, 1])
+        
+        with col_p1:
+            st.markdown("#### 🏆 Staff Contribution Breakdown")
+            for _, row in emp_summary.iterrows():
+                st.write(f"**{row['Employee Name']}** ({row['Employee ID']})")
+                st.progress(float(row['Contribution %']) / 100.0)
+                st.caption(f"Total Parcels: {int(row['Parcel Count'])} | Share: {row['Contribution %']}%")
+                st.write("---")
+
+        with col_p2:
+            st.markdown("#### 📊 Task Type Summary Table")
+            pivot_prod = df_today.pivot_table(index=["Employee ID", "Employee Name"], columns="Task Type", values="Parcel Count", aggfunc="sum", fill_value=0).reset_index()
+            st.dataframe(pivot_prod, use_container_width=True)
+
         st.markdown("---")
+        st.markdown("#### 📈 Staff Wise Task Graph")
+        emp_prod = df_today.groupby(["Employee Name", "Task Type"])["Parcel Count"].sum().reset_index()
         st.bar_chart(emp_prod, x="Employee Name", y="Parcel Count", color="Task Type", stack=False)
     else: 
-        st.info("No records found for this date.")
+        st.info("No records logged for this selected date.")
 
-# ================= PAGE 3: ADMIN & RECYCLE BIN =================
-elif nav_page == "♻️ Admin & Recycle Bin":
-    st.markdown('<div class="wab-card"><h3>🔐 Admin Setup & Data Management</h3></div>', unsafe_allow_html=True)
+# ================= PAGE 3: ADMIN & EXCEL EXPORT =================
+elif nav_page == "🔐 Admin & Data Export":
+    st.markdown('<div class="wab-card"><h3>🔐 Admin Control & Date-wise Excel Export</h3></div>', unsafe_allow_html=True)
     
     if not st.session_state["admin_logged"]:
-        st.warning("Locked Section. Enter password in sidebar to unlock.")
+        st.warning("⚠️ Access Locked. Enter Admin password in the sidebar control panel to access.")
     else:
-        tab_data, tab_trash = st.tabs(["⚙️ Master Tables", "♻️ Recycle Bin"])
+        tab_export, tab_master, tab_reset = st.tabs(["📊 Date-Wise Export & Reports", "⚙️ Master Tables (Courier & Staff)", "🗑️ Reset / Clear Data"])
         
-        with tab_data:
+        # TAB 1: EXPORT DATA
+        with tab_export:
+            st.markdown("#### 📅 Filter & Download Data by Date Range")
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                filter_date = st.date_input("Select Date for Report", date.today())
+                filter_date_str = str(filter_date)
+            
+            filtered_df = st.session_state["data"]
+            if not filtered_df.empty:
+                filtered_df = filtered_df[filtered_df["Date"] == filter_date_str]
+
+            st.write(f"**Total Records found for {filter_date_str}:** {len(filtered_df)}")
+            st.dataframe(filtered_df, use_container_width=True)
+
+            if not filtered_df.empty:
+                col_d1, col_d2 = st.columns(2)
+                with col_d1:
+                    excel_data = convert_df_to_excel(filtered_df)
+                    st.download_button(
+                        label="📥 Download Excel (.xlsx)",
+                        data=excel_data,
+                        file_name=f"Warehouse_Report_{filter_date_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                with col_d2:
+                    csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📄 Download CSV File",
+                        data=csv_data,
+                        file_name=f"Warehouse_Report_{filter_date_str}.csv",
+                        mime="text/csv"
+                    )
+
+        # TAB 2: MASTER TABLES (EMPLOYEES & COURIER GADI MASTER)
+        with tab_master:
             col_d1, col_d2 = st.columns(2)
             with col_d1:
                 st.markdown("#### 👤 Employee Master")
@@ -455,38 +561,57 @@ elif nav_page == "♻️ Admin & Recycle Bin":
                 st.dataframe(emp_df, use_container_width=True)
             
             with col_d2:
-                st.markdown("#### 🚚 Courier Master")
-                couriers_list = st.session_state["couriers"]
+                st.markdown("#### 🚚 Courier & Gadi (Vehicle) Master")
+                couriers_df = st.session_state["couriers_df"]
+                
                 new_c = st.text_input("New Courier Name")
-                if st.button("➕ Add Courier"):
-                    if new_c and new_c not in couriers_list:
-                        couriers_list.append(new_c)
-                        save_couriers(couriers_list)
-                        st.success("Courier Added!")
+                new_v = st.text_input("Default Gadi (Vehicle) No.", value="MP09-XX-0000")
+                
+                if st.button("➕ Add Courier & Gadi No."):
+                    if new_c and new_c not in couriers_df["Courier Name"].values:
+                        new_row = pd.DataFrame({"Courier Name": [new_c], "Vehicle No": [new_v]})
+                        couriers_df = pd.concat([couriers_df, new_row], ignore_index=True)
+                        save_couriers(couriers_df)
+                        st.session_state["couriers_df"] = couriers_df
+                        st.success(f"Courier {new_c} with Gadi No. {new_v} Added!")
                         st.rerun()
-                st.write("**Current Couriers:**")
-                st.write(couriers_list)
+                
+                st.markdown("##### Current Courier & Vehicle Master:")
+                st.dataframe(couriers_df, use_container_width=True)
 
-        with tab_trash:
-            st.markdown("#### 🗑️ Deleted Records")
-            trash_df = st.session_state["trash_data"]
-            if not trash_df.empty:
-                st.dataframe(trash_df, use_container_width=True)
-                col_t1, col_t2 = st.columns(2)
-                with col_t1:
-                    if st.button("♻️ Restore All Data"):
-                        restore_df = trash_df.drop(columns=["Deleted Time"])
-                        st.session_state["data"] = pd.concat([st.session_state["data"], restore_df], ignore_index=True)
-                        save_data(st.session_state["data"])
-                        save_trash(pd.DataFrame(columns=trash_df.columns))
-                        st.session_state["trash_data"] = load_trash()
-                        st.success("All data restored!")
+        # TAB 3: DATA RESET
+        with tab_reset:
+            st.markdown("#### ⚠️ Permanent Data Clear / Reset")
+            st.error("DHYAN DEIN: Is option se aapka sara recorded data permanently delete ho jayega!")
+            
+            warn_confirm = st.checkbox("YES, I understand all data will be permanently deleted.")
+            
+            col_del1, col_del2 = st.columns(2)
+            with col_del1:
+                if st.button("🗑️ Delete Selected Date Data"):
+                    if warn_confirm:
+                        all_df = st.session_state["data"]
+                        all_df = all_df[all_df["Date"] != selected_date_str]
+                        st.session_state["data"] = all_df
+                        save_data(all_df)
+                        st.success(f"Data for {selected_date_str} cleared permanently!")
                         st.rerun()
-                with col_t2:
-                    if st.button("🔥 Empty Recycle Bin permanently"):
-                        save_trash(pd.DataFrame(columns=trash_df.columns))
-                        st.session_state["trash_data"] = load_trash()
-                        st.warning("Recycle Bin Emptied!")
+                    else:
+                        st.warning("Pehle upar diye gaye confirmation checkbox ko select karein.")
+
+            with col_del2:
+                if st.button("🔥 CLEAR ALL SYSTEM DATA PERMANENTLY"):
+                    if warn_confirm:
+                        empty_df = pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee ID", "Employee Name", "Task Type", "Courier", "Parcel Count"])
+                        empty_rep = pd.DataFrame(columns=["Date", "Courier", "Vehicle No", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
+                        
+                        st.session_state["data"] = empty_df
+                        st.session_state["dispatch_reports"] = empty_rep
+                        
+                        save_data(empty_df)
+                        save_reports(empty_rep)
+                        
+                        st.success("System Reset Completed! All records cleared.")
                         st.rerun()
-            else: 
-                st.info("Recycle Bin is empty.")
+                    else:
+                        st.warning("Pehle upar diye gaye confirmation checkbox ko select karein.")
