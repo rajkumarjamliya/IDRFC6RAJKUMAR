@@ -75,8 +75,11 @@ st.markdown(
      justify-content: center;
      width: 100%;
      box-shadow: 0 4px 10px rgba(37, 211, 102, 0.2);
+     transition: background 0.3s;
  }
  .wa-btn-container a:hover { background-color: #1ebe57; color: white; }
+ 
+ .stAlert { border-radius: 8px; }
  </style>
  """,
     unsafe_allow_html=True,
@@ -189,7 +192,7 @@ with st.sidebar:
 
     nav_page = st.radio(
         "🌐 Navigation Menu",
-        ["🏠 Home Operations", "📊 Employee Productivity", "🔐 Admin & Data Export"]
+        ["🏠 Home Operations", "📊 Employee Productivity", "🔐 Admin & Excel Export"]
     )
 
     st.markdown("---")
@@ -517,7 +520,7 @@ elif nav_page == "🔐 Admin & Data Export":
             col_f1, col_f2 = st.columns(2)
             with col_f1:
                 from_d = st.date_input("From Date", date.today() - timedelta(days=7))
-            with col_d2:
+            with col_f2:
                 to_d = st.date_input("To Date", date.today())
             
             all_df = pd.read_csv("warehouse_entries.csv") if os.path.exists("warehouse_entries.csv") else pd.DataFrame()
