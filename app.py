@@ -20,7 +20,7 @@ BACKUP_DIR = "backups"
 if not os.path.exists(BACKUP_DIR):
     os.makedirs(BACKUP_DIR)
 
-# ================= CSS STYLING (Clean Web Design) =================
+# ================= CSS STYLING =================
 st.markdown(
     """
  <style>
@@ -224,7 +224,6 @@ nav_page = st.sidebar.radio(
     "Navigation Menu",
     [
         "🏠 Home Manual Entry",
-        "🚚 Courier In/Out & Dispatch Hub",
         "📊 Employee Work Report",
         "🔐 Admin & Master Setup",
     ],
@@ -301,17 +300,18 @@ if nav_page == "🏠 Home Manual Entry":
             ],
         )
 
+        # CONDITIONAL COURIER DROPDOWN: Manifest chayan karne par hi dikhai dega
         courier_val = "N/A"
-        box_count_val = st.number_input(
-            "Total Box Count (सँख्या)", min_value=1, value=1, step=1
-        )
-
         if task_type == "Manifest":
             st.markdown("---")
             st.subheader("🚚 Select Courier Company")
             courier_val = st.selectbox(
                 "Courier Name", st.session_state["couriers"]
             )
+
+        box_count_val = st.number_input(
+            "Total Box Count (सँख्या)", min_value=1, value=1, step=1
+        )
 
         if st.button("💾 Save Manual Entry", use_container_width=True):
             if (
@@ -454,9 +454,8 @@ if nav_page == "🏠 Home Manual Entry":
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-
-# ================= PAGE 2: COURIER IN/OUT & DISPATCH HUB =================
-elif nav_page == "🚚 Courier In/Out & Dispatch Hub":
+    # ================= COURIER IN/OUT & DISPATCH SECTION (HOME PAGE PAR SHIFT) =================
+    st.markdown("---")
     st.markdown(
         "<div class='card-3d'><h3>🚚 Courier Time, Box Count & Dispatch Hub</h3></div>",
         unsafe_allow_html=True,
@@ -468,7 +467,7 @@ elif nav_page == "🚚 Courier In/Out & Dispatch Hub":
 
     with col_act1:
         sel_courier = st.selectbox(
-            "Select Courier",
+            "Select Courier for Timing/Dispatch",
             st.session_state["couriers"],
             key="dispatch_sel_courier",
         )
@@ -574,8 +573,6 @@ elif nav_page == "🚚 Courier In/Out & Dispatch Hub":
             st.success("Box Counts Saved Successfully!")
             st.rerun()
 
-    st.markdown("---")
-
     # Summary Table with Yesterday Carry Forward
     current_day_rep = (
         rep_df[rep_df["Date"] == selected_date_str]
@@ -668,7 +665,7 @@ elif nav_page == "🚚 Courier In/Out & Dispatch Hub":
     )
 
 
-# ================= PAGE 3: EMPLOYEE WORK REPORT =================
+# ================= PAGE 2: EMPLOYEE WORK REPORT =================
 elif nav_page == "📊 Employee Work Report":
     st.markdown(
         "<div class='card-3d'><h3>📊 Employee Work & Box Count Report</h3></div>",
@@ -699,7 +696,7 @@ elif nav_page == "📊 Employee Work Report":
         st.info("Selected date ke liye koi work entry nahi mili.")
 
 
-# ================= PAGE 4: ADMIN & MASTER SETUP =================
+# ================= PAGE 3: ADMIN & MASTER SETUP =================
 elif nav_page == "🔐 Admin & Master Setup":
     st.markdown(
         "<div class='card-3d'><h3>🔐 Admin Security & Master Setup</h3></div>",
