@@ -114,7 +114,7 @@ def load_reports():
                 df[col] = (
                     0
                     if col in ["Manifest", "Cancel", "Dispatch", "Return"]
-                    else "--:--"
+                    else "--"
                 )
         return df
     return pd.DataFrame(
@@ -149,16 +149,22 @@ def save_trash(df):
 
 
 def load_employees():
-    if os.path.exists(EMP_FILE):
-        return pd.read_csv(EMP_FILE)
+    # Naye employees ki default list (Purane naam hata diye gaye hain)
     default_emp = pd.DataFrame(
         {
-            "Employee ID": ["EMP001", "EMP002", "EMP003"],
-            "Employee Name": ["Rajkumar", "Ramesh Kumar", "Suresh Sharma"],
+            "Employee ID": ["W222449", "W224500", "W225396", "W225403"],
+            "Employee Name": [
+                "AJAY PATEL",
+                "PANKAJ PATEL",
+                "KAMLESH MANDOI",
+                "ABHISHEK PATEL",
+            ],
         }
     )
-    default_emp.to_csv(EMP_FILE, index=False)
-    return default_emp
+    if not os.path.exists(EMP_FILE):
+        default_emp.to_csv(EMP_FILE, index=False)
+        return default_emp
+    return pd.read_csv(EMP_FILE)
 
 
 def save_employees(df):
@@ -218,6 +224,7 @@ st.markdown(
 st.sidebar.markdown("### ⚙️ Control Menu")
 selected_date = st.sidebar.date_input("Working Date", date.today())
 selected_date_str = str(selected_date)
+display_date_str = selected_date.strftime("%d/%m/%Y")
 yesterday_str = str(selected_date - timedelta(days=1))
 
 nav_page = st.sidebar.radio(
@@ -255,8 +262,8 @@ if nav_page == "🏠 Home Manual Entry":
     st.markdown(
         """
     <div class="card-3d" style="border-left: 5px solid #ff3b30;">
-        <h3 style="margin:0;">📝 Manual Box Count & Task Entry</h3>
-        <p style="color:#555; margin:0;">Piklist number aur box counting enter karke employee select karein.</p>
+        <h3 style="margin:0;">📝 Task & Manifest Entry Form</h3>
+        <p style="color:#555; margin:0;">Piklist & Employee select karein. Manifest chunne par hi Courier aur Box Count open hoga.</p>
     </div>
     """,
         unsafe_allow_html=True,
@@ -300,27 +307,27 @@ if nav_page == "🏠 Home Manual Entry":
             ],
         )
 
-        # CONDITIONAL COURIER DROPDOWN: Manifest chayan karne par hi dikhai dega
+        # SIRF MANIFEST CHUNNE PAR HI COURIER AUR BOX COUNT OPTION KHULEGA
         courier_val = "N/A"
+        box_count_val = 0
+
         if task_type == "Manifest":
             st.markdown("---")
-            st.subheader("🚚 Select Courier Company")
+            st.subheader("🚚 Courier & Manifest Details")
             courier_val = st.selectbox(
                 "Courier Name", st.session_state["couriers"]
             )
+            box_count_val = st.number_input(
+                "Manifest Box Count (सँख्या)", min_value=1, value=1, step=1
+            )
 
-        box_count_val = st.number_input(
-            "Total Box Count (सँख्या)", min_value=1, value=1, step=1
-        )
-
-        if st.button("💾 Save Manual Entry", use_container_width=True):
+        if st.button("💾 Save Entry", use_container_width=True):
             if (
                 piklist_no
                 and selected_emp != "-- Select Employee --"
                 and emp_id_val
             ):
                 current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                auto_time_str = datetime.now().strftime("%I:%M %p")
 
                 new_entry = pd.DataFrame(
                     {
@@ -341,7 +348,7 @@ if nav_page == "🏠 Home Manual Entry":
                 )
                 save_data(st.session_state["data"])
 
-                # If Manifest, update dispatch summary automatically
+                # Manifest Box Auto Update in Dispatch Report
                 if task_type == "Manifest" and courier_val != "N/A":
                     rep_df = st.session_state["dispatch_reports"]
                     ex = rep_df[
@@ -357,14 +364,14 @@ if nav_page == "🏠 Home Manual Entry":
                             {
                                 "Date": [selected_date_str],
                                 "Courier": [courier_val],
-                                "In Time": [auto_time_str],
-                                "Out Time": ["--:--"],
+                                "In Time": ["--"],
+                                "Out Time": ["--"],
                                 "Manifest": [int(box_count_val)],
                                 "Cancel": [0],
                                 "Dispatch": [0],
                                 "Return": [0],
                                 "Vehicle No": ["--"],
-                                "Remark": ["Auto Logged via Manifest"],
+                                "Remark": [""],
                             }
                         )
                         rep_df = pd.concat([rep_df, new_rep], ignore_index=True)
@@ -372,10 +379,7 @@ if nav_page == "🏠 Home Manual Entry":
                     st.session_state["dispatch_reports"] = rep_df
                     save_reports(rep_df)
 
-                st.success(
-                    f"Entry Saved! Time: **{auto_time_str}** | Box Count:"
-                    f" **{box_count_val}**"
-                )
+                st.success("Entry Saved Successfully!")
                 st.rerun()
             else:
                 st.error("Piklist No. aur Employee Name chunna zaroori hai!")
@@ -384,7 +388,7 @@ if nav_page == "🏠 Home Manual Entry":
 
     with col2:
         st.markdown(
-            f"<div class='card-3d'><h4>📋 Live Table ({selected_date_str})</h4>",
+            f"<div class='card-3d'><h4>📋 Live Task Table ({selected_date_str})</h4>",
             unsafe_allow_html=True,
         )
 
@@ -409,171 +413,20 @@ if nav_page == "🏠 Home Manual Entry":
                 use_container_width=True,
                 height=260,
             )
-
-            # Edit Option
-            st.markdown("---")
-            st.markdown("#### ✏️ Edit Live Record (Box Count / Courier Name)")
-
-            edit_id = st.selectbox(
-                "Select Record ID to Edit",
-                df_today["ID"].astype(str).tolist(),
-                key="edit_entry_select",
-            )
-            target_entry = df_today[df_today["ID"].astype(str) == edit_id]
-
-            if not target_entry.empty:
-                curr_box = int(target_entry["Parcel Count"].values[0])
-                curr_cour = str(target_entry["Courier"].values[0])
-
-                col_e1, col_e2 = st.columns(2)
-                with col_e1:
-                    new_box_val = st.number_input(
-                        "New Box Count", min_value=1, value=curr_box
-                    )
-                with col_e2:
-                    new_cour_val = st.selectbox(
-                        "New Courier Name",
-                        st.session_state["couriers"],
-                        index=(
-                            st.session_state["couriers"].index(curr_cour)
-                            if curr_cour in st.session_state["couriers"]
-                            else 0
-                        ),
-                    )
-
-                if st.button("🔄 Save Changes", use_container_width=True):
-                    idx = df[df["ID"].astype(str) == edit_id].index[0]
-                    df.loc[idx, "Parcel Count"] = int(new_box_val)
-                    df.loc[idx, "Courier"] = new_cour_val
-                    st.session_state["data"] = df
-                    save_data(df)
-                    st.success("Record Updated!")
-                    st.rerun()
         else:
-            st.info("Aaj abhi tak koi entry darj nahi hui hai.")
+            st.info("Aaj abhi tak koi task entry darj nahi hui hai.")
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # ================= COURIER IN/OUT & DISPATCH SECTION (HOME PAGE PAR SHIFT) =================
+    # ================= SUMMARY TABLE & COURIER TIMING HUB =================
     st.markdown("---")
     st.markdown(
-        "<div class='card-3d'><h3>🚚 Courier Time, Box Count & Dispatch Hub</h3></div>",
+        f"<div class='card-3d'><h3>📊 Dispatch Summary Table ({display_date_str})</h3></div>",
         unsafe_allow_html=True,
     )
 
     rep_df = st.session_state["dispatch_reports"]
 
-    col_act1, col_act2, col_act3 = st.columns([1.2, 1, 1.2], gap="medium")
-
-    with col_act1:
-        sel_courier = st.selectbox(
-            "Select Courier for Timing/Dispatch",
-            st.session_state["couriers"],
-            key="dispatch_sel_courier",
-        )
-
-        veh_no = st.text_input(
-            "Vehicle No. (Optional)", placeholder="e.g. MP-09-AB-1234"
-        )
-
-        curr_row = rep_df[
-            (rep_df["Date"] == selected_date_str)
-            & (rep_df["Courier"] == sel_courier)
-        ]
-
-    with col_act2:
-        st.markdown("**🕒 Courier Timing**")
-        if st.button("📌 Mark In-Time (Now)", use_container_width=True):
-            now_time = datetime.now().strftime("%I:%M %p")
-            if not curr_row.empty:
-                idx = curr_row.index[0]
-                rep_df.loc[idx, "In Time"] = now_time
-                if veh_no:
-                    rep_df.loc[idx, "Vehicle No"] = veh_no
-            else:
-                new_r = pd.DataFrame(
-                    {
-                        "Date": [selected_date_str],
-                        "Courier": [sel_courier],
-                        "In Time": [now_time],
-                        "Out Time": ["--:--"],
-                        "Manifest": [0],
-                        "Cancel": [0],
-                        "Dispatch": [0],
-                        "Return": [0],
-                        "Vehicle No": [veh_no if veh_no else "--"],
-                        "Remark": [""],
-                    }
-                )
-                rep_df = pd.concat([rep_df, new_r], ignore_index=True)
-            st.session_state["dispatch_reports"] = rep_df
-            save_reports(rep_df)
-            st.success(f"{sel_courier} In-Time: {now_time}")
-            st.rerun()
-
-        if st.button("🏁 Mark Out-Time (Now)", use_container_width=True):
-            now_time = datetime.now().strftime("%I:%M %p")
-            if not curr_row.empty:
-                idx = curr_row.index[0]
-                rep_df.loc[idx, "Out Time"] = now_time
-            else:
-                new_r = pd.DataFrame(
-                    {
-                        "Date": [selected_date_str],
-                        "Courier": [sel_courier],
-                        "In Time": ["--:--"],
-                        "Out Time": [now_time],
-                        "Manifest": [0],
-                        "Cancel": [0],
-                        "Dispatch": [0],
-                        "Return": [0],
-                        "Vehicle No": [veh_no if veh_no else "--"],
-                        "Remark": [""],
-                    }
-                )
-                rep_df = pd.concat([rep_df, new_r], ignore_index=True)
-            st.session_state["dispatch_reports"] = rep_df
-            save_reports(rep_df)
-            st.success(f"{sel_courier} Out-Time: {now_time}")
-            st.rerun()
-
-    with col_act3:
-        st.markdown("**📦 Dispatch & Cancel Box Count**")
-        disp_boxes = st.number_input(
-            "Dispatch Box Count", min_value=0, value=0, step=5
-        )
-        cancel_boxes = st.number_input(
-            "Cancel Box Count", min_value=0, value=0, step=1
-        )
-
-        if st.button("💾 Save Box Counts", use_container_width=True):
-            if not curr_row.empty:
-                idx = curr_row.index[0]
-                rep_df.loc[idx, "Dispatch"] += int(disp_boxes)
-                rep_df.loc[idx, "Cancel"] += int(cancel_boxes)
-            else:
-                new_r = pd.DataFrame(
-                    {
-                        "Date": [selected_date_str],
-                        "Courier": [sel_courier],
-                        "In Time": ["--:--"],
-                        "Out Time": ["--:--"],
-                        "Manifest": [0],
-                        "Cancel": [int(cancel_boxes)],
-                        "Dispatch": [int(disp_boxes)],
-                        "Return": [0],
-                        "Vehicle No": [veh_no if veh_no else "--"],
-                        "Remark": [""],
-                    }
-                )
-                rep_df = pd.concat([rep_df, new_r], ignore_index=True)
-
-            st.session_state["dispatch_reports"] = rep_df
-            save_reports(rep_df)
-            st.success("Box Counts Saved Successfully!")
-            st.rerun()
-
-    # Summary Table with Yesterday Carry Forward
     current_day_rep = (
         rep_df[rep_df["Date"] == selected_date_str]
         if not rep_df.empty
@@ -585,8 +438,8 @@ if nav_page == "🏠 Home Manual Entry":
         else pd.DataFrame()
     )
 
-    display_summary_rows = []
-    wa_text = f"📦 *DELHIVERY - DEWAS DISPATCH REPORT*\n📅 *Date:* {selected_date_str}\n-----------------------------------\n"
+    summary_rows = []
+    tot_man = tot_can = tot_dis = tot_pend = 0
 
     for c in st.session_state["couriers"]:
         c_yest = (
@@ -610,15 +463,16 @@ if nav_page == "🏠 Home Manual Entry":
             if not current_day_rep.empty
             else pd.DataFrame()
         )
+
         in_t = (
-            c_curr["In Time"].values[0]
+            str(c_curr["In Time"].values[0])
             if not c_curr.empty and pd.notna(c_curr["In Time"].values[0])
-            else "--:--"
+            else "--"
         )
         out_t = (
-            c_curr["Out Time"].values[0]
+            str(c_curr["Out Time"].values[0])
             if not c_curr.empty and pd.notna(c_curr["Out Time"].values[0])
-            else "--:--"
+            else "--"
         )
         man = int(c_curr["Manifest"].values[0]) if not c_curr.empty else 0
         can = int(c_curr["Cancel"].values[0]) if not c_curr.empty else 0
@@ -628,36 +482,132 @@ if nav_page == "🏠 Home Manual Entry":
             if not c_curr.empty and "Vehicle No" in c_curr.columns
             else "--"
         )
+        rem = (
+            str(c_curr["Remark"].values[0])
+            if not c_curr.empty and "Remark" in c_curr.columns
+            else ""
+        )
 
-        final_pend = max(0, (man + y_pend) - can - dis)
+        pend = max(0, (man + y_pend) - can - dis)
 
-        display_summary_rows.append(
+        tot_man += man
+        tot_can += can
+        tot_dis += dis
+        tot_pend += pend
+
+        summary_rows.append(
             {
                 "Courier": c,
-                "Yesterday Pending": y_pend,
                 "In Time": in_t,
                 "Out Time": out_t,
                 "Manifest": man,
-                "Cancel": can,
+                "Cancel": can if can > 0 else "",
                 "Dispatch": dis,
-                "Pending": final_pend,
+                "Pending": pend if pend > 0 else "",
                 "Vehicle No": veh,
+                "Remark": rem,
             }
         )
 
-        wa_text += f"🚚 *{c}*: Man: {man} | Disp: {dis} | Can: {can} | *Pend: {final_pend}* | Gadi: {veh}\n"
+    summary_df = pd.DataFrame(summary_rows)
 
-    summary_df = pd.DataFrame(display_summary_rows)
-    st.markdown(f"#### 📋 Summary Table ({selected_date_str})")
     st.dataframe(summary_df, use_container_width=True)
 
-    # WhatsApp Share Button
+    # SUMMARY TABLE EDIT OPTION
+    st.markdown("#### ✏️ Direct Edit Summary Details")
+    col_ed1, col_ed2, col_ed3, col_ed4 = st.columns(4)
+
+    with col_ed1:
+        edit_cour = st.selectbox(
+            "Select Courier to Edit",
+            st.session_state["couriers"],
+            key="edit_summary_cour",
+        )
+    with col_ed2:
+        in_t_input = st.text_input("In Time (e.g. 10:30 AM)", placeholder="--")
+        out_t_input = st.text_input("Out Time (e.g. 06:00 PM)", placeholder="--")
+    with col_ed3:
+        veh_input = st.text_input("Gadi No.", placeholder="e.g. MP-09-1234")
+        rem_input = st.text_input("Remark", placeholder="Optional remark")
+    with col_ed4:
+        man_input = st.number_input("Manifest Count", min_value=0, value=0)
+        dis_input = st.number_input("Dispatch Count", min_value=0, value=0)
+        can_input = st.number_input("Cancel Count", min_value=0, value=0)
+
+    if st.button("🔄 Update Summary Record", use_container_width=True):
+        curr_row = rep_df[
+            (rep_df["Date"] == selected_date_str)
+            & (rep_df["Courier"] == edit_cour)
+        ]
+        if not curr_row.empty:
+            idx = curr_row.index[0]
+            if in_t_input:
+                rep_df.loc[idx, "In Time"] = in_t_input
+            if out_t_input:
+                rep_df.loc[idx, "Out Time"] = out_t_input
+            if veh_input:
+                rep_df.loc[idx, "Vehicle No"] = veh_input
+            if rem_input:
+                rep_df.loc[idx, "Remark"] = rem_input
+            if man_input > 0:
+                rep_df.loc[idx, "Manifest"] = int(man_input)
+            if dis_input > 0:
+                rep_df.loc[idx, "Dispatch"] = int(dis_input)
+            if can_input > 0:
+                rep_df.loc[idx, "Cancel"] = int(can_input)
+        else:
+            new_r = pd.DataFrame(
+                {
+                    "Date": [selected_date_str],
+                    "Courier": [edit_cour],
+                    "In Time": [in_t_input if in_t_input else "--"],
+                    "Out Time": [out_t_input if out_t_input else "--"],
+                    "Manifest": [int(man_input)],
+                    "Cancel": [int(can_input)],
+                    "Dispatch": [int(dis_input)],
+                    "Return": [0],
+                    "Vehicle No": [veh_input if veh_input else "--"],
+                    "Remark": [rem_input],
+                }
+            )
+            rep_df = pd.concat([rep_df, new_r], ignore_index=True)
+
+        st.session_state["dispatch_reports"] = rep_df
+        save_reports(rep_df)
+        st.success(f"{edit_cour} Record Updated Successfully!")
+        st.rerun()
+
+    # WHATSAPP REPORT FORMAT
+    wa_text = f"🟨 *{display_date_str}*\n\n"
+    wa_text += f"{'Courier':<12} | {'Man':<5} | {'Can':<4} | {'Dis':<5} | {'Pend':<4} | {'Gadi/Time'}\n"
+    wa_text += "--------------------------------------------------------\n"
+
+    for row in summary_rows:
+        c_name = row["Courier"]
+        m_val = str(row["Manifest"]) if row["Manifest"] != 0 else ""
+        c_val = str(row["Cancel"])
+        d_val = str(row["Dispatch"]) if row["Dispatch"] != 0 else ""
+        p_val = str(row["Pending"])
+        v_val = row["Vehicle No"] if row["Vehicle No"] != "--" else ""
+        t_val = (
+            f"({row['In Time']}-{row['Out Time']})"
+            if row["In Time"] != "--"
+            else ""
+        )
+
+        wa_text += f"{c_name:<12} | {m_val:<5} | {c_val:<4} | {d_val:<5} | {p_val:<4} | {v_val} {t_val}\n"
+
+    wa_text += "--------------------------------------------------------\n"
+    wa_text += f"*Total*        | *{tot_man}*   | *{tot_can}*  | *{tot_dis}*   | *{tot_pend}*\n"
+
     wa_url = f"https://wa.me/?text={urllib.parse.quote(wa_text)}"
+
+    st.markdown("---")
     st.markdown(
         f"""
         <a href="{wa_url}" target="_blank">
-            <button style="background-color: #25D366; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%;">
-                📲 1-Click Share Summary on WhatsApp Group
+            <button style="background-color: #25D366; color: white; border: none; padding: 14px 28px; font-size: 18px; border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%;">
+                📲 1-Click Share Table Report on WhatsApp Group
             </button>
         </a>
     """,
@@ -720,7 +670,7 @@ elif nav_page == "🔐 Admin & Master Setup":
             emp_df = st.session_state["employees"]
             col1, col2 = st.columns(2)
             with col1:
-                e_id = st.text_input("Employee ID (e.g. EMP005)")
+                e_id = st.text_input("Employee ID (e.g. W222449)")
                 e_name = st.text_input("Employee Name")
                 if st.button("➕ Add Employee"):
                     if e_id and e_name:
