@@ -5,7 +5,7 @@ import urllib.parse
 import pandas as pd
 import streamlit as st
 
-# ================= PAGE CONF & WEB THEME (Delhivery Red/Dark Style) =================
+# ================= PAGE CONF & WEB THEME =================
 st.set_page_config(
     page_title="IDRFC6 – DEWAS Logistics Portal", 
     layout="wide", 
@@ -29,12 +29,12 @@ st.markdown(
      border-bottom: 5px solid #e31d2b;
      margin-bottom: 25px;
  }
- .main-header h1 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 1px; color: #ffffff; }
- .main-header p { margin: 6px 0 0 0; font-size: 15px; color: #e1e8ed; font-weight: 400; }
+ .main-header h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: 1px; color: #ffffff; }
+ .main-header p { margin: 6px 0 0 0; font-size: 14px; color: #e1e8ed; font-weight: 400; }
  
  .wab-card {
      background-color: #ffffff;
-     padding: 22px;
+     padding: 20px;
      border-radius: 12px;
      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
      border: 1px solid #e1e8ed;
@@ -124,12 +124,6 @@ def save_reports(df):
     df.to_csv(REPORT_FILE, index=False)
     auto_backup()
 
-def load_trash():
-    if os.path.exists(TRASH_FILE): return pd.read_csv(TRASH_FILE)
-    return pd.DataFrame()
-
-def save_trash(df): df.to_csv(TRASH_FILE, index=False)
-
 def load_employees():
     if os.path.exists(EMP_FILE): return pd.read_csv(EMP_FILE)
     default_emp = pd.DataFrame({"Employee ID": ["EMP001", "EMP002"], "Employee Name": ["Rajkumar", "Operator"]})
@@ -155,16 +149,12 @@ def load_couriers():
 def save_couriers(df): 
     df.to_csv(COURIER_FILE, index=False)
 
-def convert_df_to_excel(df):
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sheet1')
-    return output.getvalue()
+def convert_df_to_csv(df):
+    return df.to_csv(index=False).encode('utf-8')
 
 # ================= SESSION INITIALIZATION =================
 if "data" not in st.session_state: st.session_state["data"] = load_data()
 if "dispatch_reports" not in st.session_state: st.session_state["dispatch_reports"] = load_reports()
-if "trash_data" not in st.session_state: st.session_state["trash_data"] = load_trash()
 if "employees" not in st.session_state: st.session_state["employees"] = load_employees()
 if "couriers_df" not in st.session_state: st.session_state["couriers_df"] = load_couriers()
 if "admin_logged" not in st.session_state: st.session_state["admin_logged"] = False
@@ -174,7 +164,7 @@ st.markdown(
     """
 <div class="main-header">
     <h1>IDRFC6 DEWAS OPERATION PORTAL</h1>
-    <p>⚡ High-Speed Warehouse Operations & Dispatch Management System | Lead Operator: RAJKUMAR</p>
+    <p>⚡ Fast Warehouse Dispatch & Employee Management | Lead: RAJKUMAR</p>
 </div>
 """,
     unsafe_allow_html=True,
@@ -183,7 +173,7 @@ st.markdown(
 # ================= SIDEBAR =================
 with st.sidebar:
     st.markdown("### ⚙️ CONTROL PANEL")
-    selected_date = st.date_input("📅 Select Working Date", date.today())
+    selected_date = st.date_input("📅 Working Date", date.today())
     selected_date_str = str(selected_date)
     yesterday_str = str(selected_date - timedelta(days=1))
 
@@ -212,7 +202,6 @@ with st.sidebar:
 # ================= PAGE 1: HOME OPERATIONS =================
 if nav_page == "🏠 Home Operations":
     
-    # METRICS DASHBOARD
     df = st.session_state["data"]
     df_today = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
     
@@ -239,7 +228,6 @@ if nav_page == "🏠 Home Operations":
             emp_id = ""
             if selected_emp_name != "-- Select --":
                 emp_id = emp_df[emp_df["Employee Name"] == selected_emp_name]["Employee ID"].values[0]
-                st.caption(f"ID: {emp_id}")
 
         with col2:
             task_type = st.selectbox("🛠️ Task Type", ["Picking", "Packing", "Scanning", "Load", "Unload", "Manifest"])
@@ -249,19 +237,17 @@ if nav_page == "🏠 Home Operations":
             courier = "N/A"
             if task_type == "Manifest":
                 courier = st.selectbox("🚚 Select Courier Company", courier_list)
-                st.warning(f"Manifesting: {parcel_count} boxes for {courier}")
             
             st.write("")
             st.write("")
             if st.button("💾 Submit Work Entry"):
                 if piklist_no and selected_emp_name != "-- Select --":
-                    now = datetime.now()
-                    current_time = now.strftime("%Y-%m-%d %H:%M:%S")
+                    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
                     new_entry = pd.DataFrame({
                         "ID": [str(pd.Timestamp.now().timestamp())], 
                         "Date": [selected_date_str],
-                        "Timestamp": [current_time], 
+                        "Timestamp": [now_str], 
                         "Piklist No.": [str(piklist_no)],
                         "Employee ID": [emp_id], 
                         "Employee Name": [selected_emp_name],
@@ -276,7 +262,6 @@ if nav_page == "🏠 Home Operations":
                     if task_type == "Manifest":
                         rep_df = st.session_state["dispatch_reports"]
                         curr_cour = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == courier)]
-                        
                         v_no = couriers_df[couriers_df["Courier Name"] == courier]["Vehicle No"].values[0] if courier in couriers_df["Courier Name"].values else "--"
 
                         if not curr_cour.empty:
@@ -302,15 +287,25 @@ if nav_page == "🏠 Home Operations":
                     st.success("Entry Saved Successfully!")
                     st.rerun()
                 else: 
-                    st.error("Piklist No. and Employee selection are required!")
+                    st.error("Piklist No. & Employee Selection are mandatory!")
 
-    # LIVE RECORDS TABLE
-    st.markdown(f'<div class="wab-card"><h4>📋 Live Task Log ({selected_date_str})</h4></div>', unsafe_allow_html=True)
+    # LIVE LOG TABLE (EDITABLE)
+    st.markdown(f'<div class="wab-card"><h4>📋 Live Task Log ({selected_date_str}) - [Click Cell to Edit / Select Row to Delete]</h4></div>', unsafe_allow_html=True)
     if not df_today.empty:
-        st.dataframe(
-            df_today[["Timestamp", "Piklist No.", "Employee Name", "Task Type", "Courier", "Parcel Count"]].sort_values(by="Timestamp", ascending=False),
+        edited_today = st.data_editor(
+            df_today,
+            key="home_live_editor",
+            num_rows="dynamic",
             use_container_width=True
         )
+        if st.button("💾 Save Changes to Task Log"):
+            all_df = st.session_state["data"]
+            all_df = all_df[all_df["Date"] != selected_date_str]
+            updated_df = pd.concat([all_df, edited_today], ignore_index=True)
+            st.session_state["data"] = updated_df
+            save_data(updated_df)
+            st.success("Live Log Updated Successfully!")
+            st.rerun()
     else: 
         st.info("No records logged for today yet.")
 
@@ -322,15 +317,14 @@ if nav_page == "🏠 Home Operations":
     rep_df = st.session_state["dispatch_reports"]
     col_in, col_box, col_out = st.columns([1, 1.2, 1], gap="medium")
 
-    # 1. IN-TIME MODULE WITH AUTO VEHICLE NO
+    # 1. IN-TIME MODULE
     with col_in:
         st.markdown("#### 1. 📌 Courier In-Time")
         c_in_sel = st.selectbox("Select Courier (IN)", courier_list, key="c_in_key")
-        
         default_v = couriers_df[couriers_df["Courier Name"] == c_in_sel]["Vehicle No"].values[0] if c_in_sel in couriers_df["Courier Name"].values else ""
         c_in_veh = st.text_input("🚚 Vehicle No.", value=default_v, key="c_in_veh_key")
 
-        if st.button("📌 Click for Auto IN-Time"):
+        if st.button("📌 Auto IN-Time"):
             now_in = datetime.now().strftime("%I:%M %p")
             curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_in_sel)]
             if not curr_r.empty:
@@ -347,10 +341,10 @@ if nav_page == "🏠 Home Operations":
                 rep_df = pd.concat([rep_df, new_r], ignore_index=True)
             st.session_state["dispatch_reports"] = rep_df
             save_reports(rep_df)
-            st.success(f"In-Time {now_in} saved for {c_in_sel} (Gadi: {c_in_veh})")
+            st.success(f"In-Time {now_in} saved!")
             st.rerun()
 
-    # 2. DISPATCH BOX ENTRY MODULE
+    # 2. DISPATCH BOX ENTRY
     with col_box:
         st.markdown("#### 2. 📦 Dispatch Box Entry")
         c_box_sel = st.selectbox("Select Courier (Dispatch)", courier_list, key="c_box_key")
@@ -372,14 +366,14 @@ if nav_page == "🏠 Home Operations":
                 rep_df = pd.concat([rep_df, new_r], ignore_index=True)
             st.session_state["dispatch_reports"] = rep_df
             save_reports(rep_df)
-            st.success(f"{box_qty} Boxes added to Dispatch for {c_box_sel}")
+            st.success(f"{box_qty} Boxes Added!")
             st.rerun()
 
     # 3. OUT-TIME MODULE
     with col_out:
         st.markdown("#### 3. 🏁 Courier Out-Time")
         c_out_sel = st.selectbox("Select Courier (OUT)", courier_list, key="c_out_key")
-        if st.button("🏁 Click for Auto OUT-Time"):
+        if st.button("🏁 Auto OUT-Time"):
             now_out = datetime.now().strftime("%I:%M %p")
             curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_out_sel)]
             v_no = couriers_df[couriers_df["Courier Name"] == c_out_sel]["Vehicle No"].values[0] if c_out_sel in couriers_df["Courier Name"].values else "--"
@@ -397,12 +391,13 @@ if nav_page == "🏠 Home Operations":
                 rep_df = pd.concat([rep_df, new_r], ignore_index=True)
             st.session_state["dispatch_reports"] = rep_df
             save_reports(rep_df)
-            st.success(f"Out-Time {now_out} saved for {c_out_sel}")
+            st.success(f"Out-Time {now_out} saved!")
             st.rerun()
 
     st.markdown("---")
-    st.markdown("#### 📊 Live Dispatch Summary Table")
-    
+    st.markdown("#### 📊 Live Dispatch Table (Direct Edit Option)")
+    st.caption("👉 Aap kisi bhi cell par click karke In Time, Out Time, Dispatch, Cancel, Vehicle No direct badal sakte hain!")
+
     today_ops = df_today[df_today["Task Type"] == "Manifest"] if not df_today.empty else pd.DataFrame()
     today_disp_rep = rep_df[rep_df["Date"] == selected_date_str] if not rep_df.empty else pd.DataFrame()
     yesterday_disp_rep = rep_df[rep_df["Date"] == yesterday_str] if not rep_df.empty else pd.DataFrame()
@@ -435,7 +430,7 @@ if nav_page == "🏠 Home Operations":
         
         final_rows.append({
             "Courier": c_name, 
-            "Gadi No.": veh_no,
+            "Vehicle No": veh_no,
             "In Time": in_t, 
             "Out Time": out_t,
             "Yes. Pend": y_pend, 
@@ -449,11 +444,42 @@ if nav_page == "🏠 Home Operations":
         
         whatsapp_text += f"🚚 *{c_name}* ({veh_no}): In:{in_t} | Out:{out_t} | Man:{man_final} | Disp:{disp} | *Pend:{pend}*\n"
 
-    st.dataframe(pd.DataFrame(final_rows), use_container_width=True)
-    
+    disp_table_df = pd.DataFrame(final_rows)
+    edited_disp_table = st.data_editor(disp_table_df, key="dispatch_live_editor", use_container_width=True)
+
+    if st.button("💾 Save Direct Edits to Dispatch Table"):
+        for _, row in edited_disp_table.iterrows():
+            c_name = row["Courier"]
+            curr_r = rep_df[(rep_df["Date"] == selected_date_str) & (rep_df["Courier"] == c_name)]
+            if not curr_r.empty:
+                idx = curr_r.index[0]
+                rep_df.loc[idx, "Vehicle No"] = row["Vehicle No"]
+                rep_df.loc[idx, "In Time"] = row["In Time"]
+                rep_df.loc[idx, "Out Time"] = row["Out Time"]
+                rep_df.loc[idx, "Manifest"] = int(row["Today Manif."])
+                rep_df.loc[idx, "Cancel"] = int(row["Cancel"])
+                rep_df.loc[idx, "Dispatch"] = int(row["Dispatch"])
+                rep_df.loc[idx, "Return"] = int(row["Return"])
+                rep_df.loc[idx, "Remark"] = row["Remark"]
+            else:
+                new_r = pd.DataFrame({
+                    "Date": [selected_date_str], "Courier": [c_name],
+                    "Vehicle No": [row["Vehicle No"]],
+                    "In Time": [row["In Time"]], "Out Time": [row["Out Time"]],
+                    "Manifest": [int(row["Today Manif."])], "Cancel": [int(row["Cancel"])], 
+                    "Dispatch": [int(row["Dispatch"])], "Return": [int(row["Return"])], 
+                    "Remark": [row["Remark"]]
+                })
+                rep_df = pd.concat([rep_df, new_r], ignore_index=True)
+        
+        st.session_state["dispatch_reports"] = rep_df
+        save_reports(rep_df)
+        st.success("Dispatch Data Changes Saved!")
+        st.rerun()
+
     col_w1, col_w2 = st.columns([2, 1])
     with col_w1:
-        st.caption("PENDING Formula = (Yesterday Pending + Today Manifest) - Cancel - Dispatch")
+        st.caption("Formula: PENDING = (Yesterday Pending + Today Manifest) - Cancel - Dispatch")
     with col_w2:
         whatsapp_text += f"-----------------------------------\n*Total Pending: {total_pend}*"
         encoded_text = urllib.parse.quote(whatsapp_text)
@@ -462,7 +488,7 @@ if nav_page == "🏠 Home Operations":
 
 # ================= PAGE 2: EMPLOYEE PRODUCTIVITY =================
 elif nav_page == "📊 Employee Productivity":
-    st.markdown(f'<div class="wab-card"><h3>📊 Employee Performance & Contribution % ({selected_date_str})</h3></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="wab-card"><h3>📊 Staff Performance & Work Summary ({selected_date_str})</h3></div>', unsafe_allow_html=True)
     df = st.session_state["data"]
     df_today = df[df["Date"] == selected_date_str] if not df.empty else pd.DataFrame()
     
@@ -470,11 +496,7 @@ elif nav_page == "📊 Employee Productivity":
         emp_summary = df_today.groupby(["Employee ID", "Employee Name"])["Parcel Count"].sum().reset_index()
         total_team_parcels = emp_summary["Parcel Count"].sum()
         
-        if total_team_parcels > 0:
-            emp_summary["Contribution %"] = ((emp_summary["Parcel Count"] / total_team_parcels) * 100).round(2)
-        else:
-            emp_summary["Contribution %"] = 0.0
-
+        emp_summary["Contribution %"] = ((emp_summary["Parcel Count"] / total_team_parcels) * 100).round(2) if total_team_parcels > 0 else 0.0
         emp_summary = emp_summary.sort_values(by="Parcel Count", ascending=False)
 
         col_p1, col_p2 = st.columns([1.2, 1])
@@ -488,12 +510,21 @@ elif nav_page == "📊 Employee Productivity":
                 st.write("---")
 
         with col_p2:
-            st.markdown("#### 📊 Task Type Summary Table")
+            st.markdown("#### 📊 Task Breakdown Table")
             pivot_prod = df_today.pivot_table(index=["Employee ID", "Employee Name"], columns="Task Type", values="Parcel Count", aggfunc="sum", fill_value=0).reset_index()
             st.dataframe(pivot_prod, use_container_width=True)
 
+            # LADKON KE KAAM KI REPORT CSV DOWNLOAD
+            csv_data = convert_df_to_csv(pivot_prod)
+            st.download_button(
+                label="📥 Download Staff Report CSV",
+                data=csv_data,
+                file_name=f"Staff_Performance_{selected_date_str}.csv",
+                mime="text/csv"
+            )
+
         st.markdown("---")
-        st.markdown("#### 📈 Staff Wise Task Graph")
+        st.markdown("#### 📈 Staff Wise Task Chart")
         emp_prod = df_today.groupby(["Employee Name", "Task Type"])["Parcel Count"].sum().reset_index()
         st.bar_chart(emp_prod, x="Employee Name", y="Parcel Count", color="Task Type", stack=False)
     else: 
@@ -501,117 +532,94 @@ elif nav_page == "📊 Employee Productivity":
 
 # ================= PAGE 3: ADMIN & EXCEL EXPORT =================
 elif nav_page == "🔐 Admin & Data Export":
-    st.markdown('<div class="wab-card"><h3>🔐 Admin Control & Date-wise Excel Export</h3></div>', unsafe_allow_html=True)
+    st.markdown('<div class="wab-card"><h3>🔐 Admin Control & Old Data Report Generator</h3></div>', unsafe_allow_html=True)
     
     if not st.session_state["admin_logged"]:
-        st.warning("⚠️ Access Locked. Enter Admin password in the sidebar control panel to access.")
+        st.warning("⚠️ Access Locked! Enter password (123) in sidebar.")
     else:
-        tab_export, tab_master, tab_reset = st.tabs(["📊 Date-Wise Export & Reports", "⚙️ Master Tables (Courier & Staff)", "🗑️ Reset / Clear Data"])
+        tab_export, tab_master, tab_reset = st.tabs(["📊 Purana Data Search & Export", "⚙️ Master Tables (Courier & Staff)", "🗑️ Reset / Clear Data"])
         
-        # TAB 1: EXPORT DATA
+        # TAB 1: DATE RANGE PURANA DATA EXPORT
         with tab_export:
-            st.markdown("#### 📅 Filter & Download Data by Date Range")
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                filter_date = st.date_input("Select Date for Report", date.today())
-                filter_date_str = str(filter_date)
+            st.markdown("#### 📅 Select Date Range for Old Data Report")
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                from_d = st.date_input("From Date", date.today() - timedelta(days=7))
+            with col_d2:
+                to_d = st.date_input("To Date", date.today())
+
+            all_df = st.session_state["data"]
+            if not all_df.empty:
+                all_df["Date_dt"] = pd.to_datetime(all_df["Date"])
+                mask = (all_df["Date_dt"] >= pd.to_datetime(from_d)) & (all_df["Date_dt"] <= pd.to_datetime(to_d))
+                filtered_df = all_df.loc[mask].drop(columns=["Date_dt"])
+            else:
+                filtered_df = pd.DataFrame()
+
+            st.write(f"**Total Records found between {from_d} and {to_d}:** {len(filtered_df)}")
             
-            filtered_df = st.session_state["data"]
             if not filtered_df.empty:
-                filtered_df = filtered_df[filtered_df["Date"] == filter_date_str]
+                edited_admin_data = st.data_editor(filtered_df, key="admin_data_editor", num_rows="dynamic", use_container_width=True)
+                
+                col_save, col_dl = st.columns(2)
+                with col_save:
+                    if st.button("💾 Save Admin Table Modifications"):
+                        st.session_state["data"] = edited_admin_data
+                        save_data(edited_admin_data)
+                        st.success("Admin Modifications Saved Successfully!")
+                        st.rerun()
 
-            st.write(f"**Total Records found for {filter_date_str}:** {len(filtered_df)}")
-            st.dataframe(filtered_df, use_container_width=True)
-
-            if not filtered_df.empty:
-                col_d1, col_d2 = st.columns(2)
-                with col_d1:
-                    excel_data = convert_df_to_excel(filtered_df)
+                with col_dl:
+                    csv_export = convert_df_to_csv(edited_admin_data)
                     st.download_button(
-                        label="📥 Download Excel (.xlsx)",
-                        data=excel_data,
-                        file_name=f"Warehouse_Report_{filter_date_str}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
-                with col_d2:
-                    csv_data = filtered_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="📄 Download CSV File",
-                        data=csv_data,
-                        file_name=f"Warehouse_Report_{filter_date_str}.csv",
+                        label="📄 Download Selected Data Report (CSV)",
+                        data=csv_export,
+                        file_name=f"Warehouse_Report_{from_d}_to_{to_d}.csv",
                         mime="text/csv"
                     )
 
-        # TAB 2: MASTER TABLES (EMPLOYEES & COURIER GADI MASTER)
+        # TAB 2: MASTER TABLES
         with tab_master:
-            col_d1, col_d2 = st.columns(2)
-            with col_d1:
+            col_m1, col_m2 = st.columns(2)
+            with col_m1:
                 st.markdown("#### 👤 Employee Master")
                 emp_df = st.session_state["employees"]
-                new_e_id = st.text_input("Employee ID")
-                new_e_name = st.text_input("Employee Name")
-                if st.button("➕ Add Employee"):
-                    if new_e_id and new_e_name:
-                        new_e = pd.DataFrame({"Employee ID": [new_e_id], "Employee Name": [new_e_name]})
-                        emp_df = pd.concat([emp_df, new_e], ignore_index=True)
-                        save_employees(emp_df)
-                        st.session_state["employees"] = emp_df
-                        st.success("Employee Added!")
-                        st.rerun()
-                st.dataframe(emp_df, use_container_width=True)
+                
+                edited_emp = st.data_editor(emp_df, key="emp_editor", num_rows="dynamic", use_container_width=True)
+                if st.button("💾 Save Employee Changes"):
+                    save_employees(edited_emp)
+                    st.session_state["employees"] = edited_emp
+                    st.success("Employee List Saved!")
+                    st.rerun()
             
-            with col_d2:
+            with col_m2:
                 st.markdown("#### 🚚 Courier & Gadi (Vehicle) Master")
                 couriers_df = st.session_state["couriers_df"]
                 
-                new_c = st.text_input("New Courier Name")
-                new_v = st.text_input("Default Gadi (Vehicle) No.", value="MP09-XX-0000")
-                
-                if st.button("➕ Add Courier & Gadi No."):
-                    if new_c and new_c not in couriers_df["Courier Name"].values:
-                        new_row = pd.DataFrame({"Courier Name": [new_c], "Vehicle No": [new_v]})
-                        couriers_df = pd.concat([couriers_df, new_row], ignore_index=True)
-                        save_couriers(couriers_df)
-                        st.session_state["couriers_df"] = couriers_df
-                        st.success(f"Courier {new_c} with Gadi No. {new_v} Added!")
-                        st.rerun()
-                
-                st.markdown("##### Current Courier & Vehicle Master:")
-                st.dataframe(couriers_df, use_container_width=True)
+                edited_cour = st.data_editor(couriers_df, key="cour_editor", num_rows="dynamic", use_container_width=True)
+                if st.button("💾 Save Courier & Gadi Changes"):
+                    save_couriers(edited_cour)
+                    st.session_state["couriers_df"] = edited_cour
+                    st.success("Courier & Vehicle Master Saved!")
+                    st.rerun()
 
         # TAB 3: DATA RESET
         with tab_reset:
-            st.markdown("#### ⚠️ Permanent Data Clear / Reset")
-            st.error("DHYAN DEIN: Is option se aapka sara recorded data permanently delete ho jayega!")
+            st.markdown("#### ⚠️ Permanent System Reset")
+            warn_confirm = st.checkbox("YES, I want to delete data.")
             
-            warn_confirm = st.checkbox("YES, I understand all data will be permanently deleted.")
-            
-            col_del1, col_del2 = st.columns(2)
-            with col_del1:
-                if st.button("🗑️ Delete Selected Date Data"):
-                    if warn_confirm:
-                        all_df = st.session_state["data"]
-                        all_df = all_df[all_df["Date"] != selected_date_str]
-                        st.session_state["data"] = all_df
-                        save_data(all_df)
-                        st.success(f"Data for {selected_date_str} cleared permanently!")
-                        st.rerun()
-                    else:
-                        st.warning("Pehle upar diye gaye confirmation checkbox ko select karein.")
-
-            with col_del2:
-                if st.button("🔥 CLEAR ALL SYSTEM DATA PERMANENTLY"):
-                    if warn_confirm:
-                        empty_df = pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee ID", "Employee Name", "Task Type", "Courier", "Parcel Count"])
-                        empty_rep = pd.DataFrame(columns=["Date", "Courier", "Vehicle No", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
-                        
-                        st.session_state["data"] = empty_df
-                        st.session_state["dispatch_reports"] = empty_rep
-                        
-                        save_data(empty_df)
-                        save_reports(empty_rep)
-                        
-                        st.success("System Reset Completed! All records cleared.")
-                        st.rerun()
-                    else:
-                        st.warning("Pehle upar diye gaye confirmation checkbox ko select karein.")
+            if st.button("🔥 CLEAR ALL SYSTEM DATA PERMANENTLY"):
+                if warn_confirm:
+                    empty_df = pd.DataFrame(columns=["ID", "Date", "Timestamp", "Piklist No.", "Employee ID", "Employee Name", "Task Type", "Courier", "Parcel Count"])
+                    empty_rep = pd.DataFrame(columns=["Date", "Courier", "Vehicle No", "In Time", "Out Time", "Manifest", "Cancel", "Dispatch", "Return", "Remark"])
+                    
+                    st.session_state["data"] = empty_df
+                    st.session_state["dispatch_reports"] = empty_rep
+                    
+                    save_data(empty_df)
+                    save_reports(empty_rep)
+                    
+                    st.success("System Reset Completed! All records cleared.")
+                    st.rerun()
+                else:
+                    st.warning("Please tick the confirmation checkbox first.")
