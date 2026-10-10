@@ -1,0 +1,40 @@
+function doGet(e) {
+  var action = e.parameter.action;
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var data = sheet.getDataRange().getValues();
+  
+  if (action === "read") {
+    var rows = [];
+    for (var i = 1; i < data.length; i++) {
+      rows.push({
+        date: data[i][0],
+        facility: data[i][1],
+        dept: data[i][2],
+        empId: data[i][3],
+        name: data[i][4],
+        mobile: data[i][5],
+        shift: data[i][6],
+        status: data[i][7],
+        timeIn: data[i][8],
+        timeOut: data[i][9],
+        totalHours: data[i][10],
+        ot: data[i][11],
+        reason: data[i][12]
+      });
+    }
+    return ContentService.createTextOutput(JSON.stringify(rows)).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var p = JSON.parse(e.postData.contents);
+  
+  sheet.appendRow([
+    p.date, p.facility, p.dept, p.empId, p.name, 
+    p.mobile, p.shift, p.status, p.timeIn, p.timeOut, 
+    p.totalHours, p.ot, p.reason
+  ]);
+  
+  return ContentService.createTextOutput(JSON.stringify({status: "SUCCESS"})).setMimeType(ContentService.MimeType.JSON);
+}
